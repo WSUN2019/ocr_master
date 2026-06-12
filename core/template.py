@@ -67,6 +67,7 @@ def build_template(
     fields: list[dict],
     row_detection: dict,
     source_page: int = 0,
+    sample_image_path: str = "",
 ) -> dict:
     """
     Construct a template dict ready for save_template().
@@ -81,6 +82,7 @@ def build_template(
         "source_page": source_page,
         "fields": fields,
         "row_detection": row_detection,
+        "sample_image_path": sample_image_path,
     }
 
 

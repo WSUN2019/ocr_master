@@ -7,22 +7,36 @@ from typing import Optional
 
 from PyQt6.QtCore import Qt, QRectF, pyqtSignal, QPointF, QTimer
 from PyQt6.QtGui import (
-    QPixmap, QImage, QPen, QBrush, QColor, QCursor, QPainter
+    QPixmap, QPen, QBrush, QColor, QCursor, QPainter
 )
 from PyQt6.QtWidgets import (
     QGraphicsView, QGraphicsScene, QGraphicsRectItem,
-    QGraphicsPixmapItem, QSizePolicy
+    QGraphicsPixmapItem, QSizePolicy, QGraphicsItem
 )
 from PIL import Image
 
 
-# ── Colours ───────────────────────────────────────────────────────────────────
 RED_PEN   = QPen(QColor(230, 57, 70), 2)
 RED_BRUSH = QBrush(QColor(230, 57, 70, 50))
+HANDLE_SIZE = 8
+
+# Handle position indices
+TL, TC, TR, ML, MR, BL, BC, BR = range(8)
+
+_HANDLE_CURSORS = [
+    Qt.CursorShape.SizeFDiagCursor,  # TL
+    Qt.CursorShape.SizeVerCursor,    # TC
+    Qt.CursorShape.SizeBDiagCursor,  # TR
+    Qt.CursorShape.SizeHorCursor,    # ML
+    Qt.CursorShape.SizeHorCursor,    # MR
+    Qt.CursorShape.SizeBDiagCursor,  # BL
+    Qt.CursorShape.SizeVerCursor,    # BC
+    Qt.CursorShape.SizeFDiagCursor,  # BR
+]
 
 
 def _pil_to_qpixmap(img: Image.Image) -> QPixmap:
-    """Convert PIL Image to QPixmap via an in-memory PNG (avoids raw-byte alignment issues)."""
+    """Convert PIL Image to QPixmap via PNG buffer (avoids raw-byte alignment issues)."""
     buf = io.BytesIO()
     img.convert("RGB").save(buf, format="PNG")
     pix = QPixmap()
@@ -30,24 +44,131 @@ def _pil_to_qpixmap(img: Image.Image) -> QPixmap:
     return pix
 
 
-class BoxItem(QGraphicsRectItem):
-    """A single labelled red bounding box on the canvas."""
+class _ResizeHandle(QGraphicsRectItem):
+    """Small drag handle on a BoxItem corner/edge used to resize it."""
 
-    def __init__(self, rect: QRectF, field_name: str = ""):
+    def __init__(self, parent: "BoxItem", pos_index: int):
+        super().__init__(parent)
+        self._pos_index = pos_index
+        self._dragging = False
+        s = HANDLE_SIZE
+        self.setRect(-s / 2, -s / 2, s, s)
+        self.setPen(QPen(QColor(255, 255, 255), 1))
+        self.setBrush(QBrush(QColor(230, 57, 70)))
+        self.setZValue(10)
+        self.setVisible(False)
+        self.setCursor(QCursor(_HANDLE_CURSORS[pos_index]))
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable, False)
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, False)
+
+    def update_pos(self):
+        r = self.parentItem().rect()
+        cx, cy = r.center().x(), r.center().y()
+        pts = [
+            QPointF(r.left(),  r.top()),     # TL
+            QPointF(cx,        r.top()),     # TC
+            QPointF(r.right(), r.top()),     # TR
+            QPointF(r.left(),  cy),          # ML
+            QPointF(r.right(), cy),          # MR
+            QPointF(r.left(),  r.bottom()),  # BL
+            QPointF(cx,        r.bottom()),  # BC
+            QPointF(r.right(), r.bottom()),  # BR
+        ]
+        self.setPos(pts[self._pos_index])
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._dragging = True
+            event.accept()
+        else:
+            super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if not self._dragging:
+            super().mouseMoveEvent(event)
+            return
+        parent = self.parentItem()
+        r = parent.rect()
+        local = parent.mapFromScene(event.scenePos())
+        new_rect = QRectF(r)
+        idx = self._pos_index
+        if idx in (TL, TC, TR):
+            new_rect.setTop(local.y())
+        if idx in (BL, BC, BR):
+            new_rect.setBottom(local.y())
+        if idx in (TL, ML, BL):
+            new_rect.setLeft(local.x())
+        if idx in (TR, MR, BR):
+            new_rect.setRight(local.x())
+        new_rect = new_rect.normalized()
+        if new_rect.width() > 5 and new_rect.height() > 5:
+            parent.setRect(new_rect)
+            parent._update_handles()
+        event.accept()
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._dragging = False
+            event.accept()
+        else:
+            super().mouseReleaseEvent(event)
+
+
+REPEAT_PEN   = QPen(QColor(255, 200, 0), 2, Qt.PenStyle.DashLine)
+REPEAT_BRUSH = QBrush(QColor(255, 200, 0, 40))
+
+
+class BoxItem(QGraphicsRectItem):
+    """A labelled red bounding box with 8 resize handles that appear on selection."""
+
+    def __init__(self, rect: QRectF, field_name: str = "", repeat: bool = False):
         super().__init__(rect)
         self.field_name = field_name
-        self.setPen(RED_PEN)
-        self.setBrush(RED_BRUSH)
-        self.setFlag(QGraphicsRectItem.GraphicsItemFlag.ItemIsSelectable)
-        self.setFlag(QGraphicsRectItem.GraphicsItemFlag.ItemIsMovable)
-        self.setToolTip(field_name)
+        self.repeat = repeat
+        self._apply_style()
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable)
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemSendsGeometryChanges)
+        self._update_tooltip()
+
+        self._handles = [_ResizeHandle(self, i) for i in range(8)]
+        self._update_handles()
+
+    def _apply_style(self):
+        if self.repeat:
+            self.setPen(REPEAT_PEN)
+            self.setBrush(REPEAT_BRUSH)
+        else:
+            self.setPen(RED_PEN)
+            self.setBrush(RED_BRUSH)
+
+    def _update_tooltip(self):
+        suffix = " [repeats every row]" if self.repeat else ""
+        self.setToolTip(f"{self.field_name}{suffix}")
+
+    def set_repeat(self, value: bool):
+        self.repeat = value
+        self._apply_style()
+        self._update_tooltip()
+        self.update()
+
+    def _update_handles(self):
+        for h in self._handles:
+            h.update_pos()
+
+    def itemChange(self, change, value):
+        if change == QGraphicsItem.GraphicsItemChange.ItemSelectedChange:
+            for h in self._handles:
+                h.setVisible(bool(value))
+        return super().itemChange(change, value)
 
     def paint(self, painter, option, widget=None):
         super().paint(painter, option, widget)
         if self.field_name:
             painter.setPen(QPen(QColor(255, 255, 255)))
             r = self.rect()
-            painter.drawText(int(r.x()) + 3, int(r.y()) + 14, self.field_name)
+            label = f"↺ {self.field_name}" if self.repeat else self.field_name
+            painter.drawText(int(r.x()) + 3, int(r.y()) + 14, label)
 
 
 class CanvasWidget(QGraphicsView):
@@ -56,8 +177,9 @@ class CanvasWidget(QGraphicsView):
     Scene coordinates == source image pixels (image placed at origin 0,0).
     """
 
-    box_drawn   = pyqtSignal(QRectF)
-    box_removed = pyqtSignal(int)
+    box_drawn    = pyqtSignal(QRectF)
+    box_removed  = pyqtSignal(int)
+    box_selected = pyqtSignal(int)   # index into _boxes list; -1 = none
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -81,6 +203,23 @@ class CanvasWidget(QGraphicsView):
         self._temp_rect: Optional[QGraphicsRectItem] = None
         self._image_loaded = False
 
+        self._scene.selectionChanged.connect(self._on_selection_changed)
+
+    # ── Selection sync ────────────────────────────────────────────────────────
+
+    def _on_selection_changed(self):
+        for i, box in enumerate(self._boxes):
+            if box.isSelected():
+                self.box_selected.emit(i)
+                return
+        self.box_selected.emit(-1)
+
+    def select_box_by_index(self, index: int):
+        """Select a box by list index (called when user clicks the field list)."""
+        self._scene.clearSelection()
+        if 0 <= index < len(self._boxes):
+            self._boxes[index].setSelected(True)
+
     # ── Image loading ─────────────────────────────────────────────────────────
 
     def set_image(self, img: Image.Image):
@@ -97,12 +236,11 @@ class CanvasWidget(QGraphicsView):
         self._scene.setSceneRect(0, 0, pix.width(), pix.height())
         self._image_loaded = True
 
-        # Reset any previous transform, then fit — deferred so layout is complete
         self.resetTransform()
         QTimer.singleShot(50, self._fit_image)
 
     def fit_image(self):
-        """Public slot — also wired to the 'Fit' button in template builder."""
+        """Public slot wired to the 'Fit Image' button."""
         self._fit_image()
 
     def _fit_image(self):
@@ -121,14 +259,55 @@ class CanvasWidget(QGraphicsView):
         self.clear_boxes()
         for f in field_defs:
             x0, y0, x1, y1 = f["bbox"]
-            self._add_box(QRectF(x0, y0, x1 - x0, y1 - y0), f["name"])
+            self._add_box(QRectF(x0, y0, x1 - x0, y1 - y0), f["name"],
+                          repeat=f.get("repeat", False))
+
+    def _add_box(self, rect: QRectF, field_name: str, repeat: bool = False) -> BoxItem:
+        box = BoxItem(rect, field_name, repeat=repeat)
+        self._scene.addItem(box)
+        self._boxes.append(box)
+        return box
+
+    def add_named_box(self, rect: QRectF, field_name: str):
+        self._add_box(rect, field_name)
+
+    def set_box_repeat(self, index: int, value: bool):
+        if 0 <= index < len(self._boxes):
+            self._boxes[index].set_repeat(value)
+
+    def remove_selected_box(self):
+        for i, box in enumerate(self._boxes):
+            if box.isSelected():
+                self._scene.removeItem(box)
+                self._boxes.pop(i)
+                self.box_removed.emit(i)
+                return
+
+    def get_field_defs(self) -> list[dict]:
+        defs = []
+        for box in self._boxes:
+            r = box.sceneBoundingRect()
+            defs.append({
+                "name":   box.field_name,
+                "label":  box.field_name.replace("_", " ").title(),
+                "page":   0,
+                "bbox":   [round(r.x(), 2), round(r.y(), 2),
+                           round(r.x() + r.width(), 2), round(r.y() + r.height(), 2)],
+                "repeat": box.repeat,
+            })
+        return defs
 
     # ── Mouse drawing ─────────────────────────────────────────────────────────
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            self._drawing = True
-            self._draw_start = self.mapToScene(event.pos())
+            scene_pos = self.mapToScene(event.pos())
+            # Only start drawing if clicking on empty canvas (not an existing box/handle)
+            items = self._scene.items(scene_pos)
+            non_bg = [i for i in items if not isinstance(i, QGraphicsPixmapItem)]
+            if not non_bg:
+                self._drawing = True
+                self._draw_start = scene_pos
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
@@ -153,36 +332,6 @@ class CanvasWidget(QGraphicsView):
                     self.box_drawn.emit(rect)
         super().mouseReleaseEvent(event)
 
-    def _add_box(self, rect: QRectF, field_name: str) -> BoxItem:
-        box = BoxItem(rect, field_name)
-        self._scene.addItem(box)
-        self._boxes.append(box)
-        return box
-
-    def add_named_box(self, rect: QRectF, field_name: str):
-        self._add_box(rect, field_name)
-
-    def remove_selected_box(self):
-        for i, box in enumerate(self._boxes):
-            if box.isSelected():
-                self._scene.removeItem(box)
-                self._boxes.pop(i)
-                self.box_removed.emit(i)
-                return
-
-    def get_field_defs(self) -> list[dict]:
-        defs = []
-        for box in self._boxes:
-            r = box.sceneBoundingRect()
-            defs.append({
-                "name": box.field_name,
-                "label": box.field_name.replace("_", " ").title(),
-                "page": 0,
-                "bbox": [round(r.x(), 2), round(r.y(), 2),
-                         round(r.x() + r.width(), 2), round(r.y() + r.height(), 2)],
-            })
-        return defs
-
     # ── Zoom / resize ─────────────────────────────────────────────────────────
 
     def wheelEvent(self, event):
@@ -191,7 +340,6 @@ class CanvasWidget(QGraphicsView):
 
     def showEvent(self, event):
         super().showEvent(event)
-        # First time the widget is actually shown — now fitInView has real dimensions
         QTimer.singleShot(10, self._fit_image)
 
     def resizeEvent(self, event):

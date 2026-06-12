@@ -16,8 +16,10 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import QDate
 
-from core.storage import query_transactions, query_import_log, delete_by_source, df_to_csv_bytes, init_db
+from core.storage import query_transactions, query_import_log, delete_by_source, delete_by_batch, df_to_csv_bytes, init_db
 from core.template import template_names
+
+OUTPUT_DIR = Path(__file__).parent.parent / "output"
 
 
 class PandasModel(QAbstractTableModel):
@@ -107,6 +109,11 @@ class HistoryWidget(QWidget):
         btn_query.clicked.connect(self._run_query)
         filter_layout.addWidget(btn_query)
 
+        btn_all = QPushButton("Show All")
+        btn_all.setToolTip("Load all rows regardless of date")
+        btn_all.clicked.connect(self._run_query_all)
+        filter_layout.addWidget(btn_all)
+
         root.addWidget(filter_group)
 
         # ── Table ─────────────────────────────────────────────────────────────
@@ -116,9 +123,19 @@ class HistoryWidget(QWidget):
         self._table = QTableView()
         self._table.setAlternatingRowColors(True)
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        self._table.horizontalHeader().setStretchLastSection(True)
         self._table.setSortingEnabled(True)
+
+        hdr = self._table.horizontalHeader()
+        hdr.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        hdr.setStretchLastSection(False)
+        hdr.setMinimumSectionSize(60)
+        hdr.setDefaultSectionSize(130)
+
+        self._table.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self._table.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self._table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self._table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+
         table_layout.addWidget(self._table)
 
         # Action row
@@ -148,13 +165,22 @@ class HistoryWidget(QWidget):
     def showEvent(self, event):
         super().showEvent(event)
         self._refresh_filters()
-        self._run_query()
+        self._run_query_all()
 
     def _refresh_filters(self):
         self._tpl_filter.clear()
         self._tpl_filter.addItem("All templates", None)
         for name in template_names():
             self._tpl_filter.addItem(name, name)
+
+    def _run_query_all(self):
+        """Load all rows with no date filter."""
+        tpl = self._tpl_filter.currentData()
+        self._df = query_transactions(
+            template_name=tpl,
+            limit=self._limit_spin.value(),
+        )
+        self._after_query()
 
     def _run_query(self):
         tpl = self._tpl_filter.currentData()
@@ -164,13 +190,26 @@ class HistoryWidget(QWidget):
             template_name=tpl,
             limit=self._limit_spin.value(),
         )
+        self._after_query()
+
+    def _after_query(self):
         self._load_table(self._df)
 
-        # Refresh delete combo
         self._delete_combo.clear()
-        if "source_file" in self._df.columns:
-            for src in sorted(self._df["source_file"].dropna().unique()):
-                self._delete_combo.addItem(src)
+        if "batch_name" in self._df.columns:
+            # Use batch_name; fall back to source_file for legacy rows with NULL batch_name
+            labels = (
+                self._df["batch_name"]
+                .where(self._df["batch_name"].notna(), self._df.get("source_file"))
+                .dropna()
+                .unique()
+            )
+        elif "source_file" in self._df.columns:
+            labels = self._df["source_file"].dropna().unique()
+        else:
+            labels = []
+        for val in sorted(labels):
+            self._delete_combo.addItem(val)
 
         self.status_message.emit(f"Loaded {len(self._df)} transactions")
 
@@ -181,6 +220,12 @@ class HistoryWidget(QWidget):
         proxy.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         self._table.setModel(proxy)
         self._lbl_count.setText(f"{len(df)} rows")
+
+        # Size columns to content on first load, then leave them interactive
+        hdr = self._table.horizontalHeader()
+        hdr.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        self._table.resizeColumnsToContents()
+        hdr.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
 
     def _apply_search_filter(self, text: str):
         if self._df is None:
@@ -197,8 +242,9 @@ class HistoryWidget(QWidget):
         if self._df is None or self._df.empty:
             QMessageBox.information(self, "Export", "No data to export.")
             return
+        OUTPUT_DIR.mkdir(exist_ok=True)
         path, _ = QFileDialog.getSaveFileName(
-            self, "Save CSV", str(Path.home() / "history_export.csv"), "CSV (*.csv)"
+            self, "Save CSV", str(OUTPUT_DIR / "history_export.csv"), "CSV (*.csv)"
         )
         if path:
             self._df.to_csv(path, index=False)
@@ -215,6 +261,6 @@ class HistoryWidget(QWidget):
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         if reply == QMessageBox.StandardButton.Yes:
-            n = delete_by_source(src)
-            self._run_query()
+            n = delete_by_batch(src)
+            self._run_query_all()
             self.status_message.emit(f"Deleted {n} rows from '{src}'")

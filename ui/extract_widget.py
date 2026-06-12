@@ -20,6 +20,10 @@ from core.template import list_templates, load_template
 from core.extractor import tesseract_available
 from ui.ocr_worker import OcrWorker
 
+APP_DIR    = Path(__file__).parent.parent
+INPUT_DIR  = APP_DIR / "input_files"
+OUTPUT_DIR = APP_DIR / "output"
+
 
 # ── Pandas table model ────────────────────────────────────────────────────────
 
@@ -184,9 +188,10 @@ class ExtractWidget(QWidget):
     # ── File management ───────────────────────────────────────────────────────
 
     def _add_files(self):
+        INPUT_DIR.mkdir(exist_ok=True)
         paths, _ = QFileDialog.getOpenFileNames(
             self, "Select Statement Files",
-            str(Path.home()),
+            str(INPUT_DIR),
             "Images & PDFs (*.jpg *.jpeg *.png *.pdf)"
         )
         for p in paths:
@@ -287,8 +292,9 @@ class ExtractWidget(QWidget):
         if self._df is None or self._df.empty:
             QMessageBox.information(self, "Export", "No data to export yet.")
             return
+        OUTPUT_DIR.mkdir(exist_ok=True)
         path, _ = QFileDialog.getSaveFileName(
-            self, "Save CSV", str(Path.home() / "transactions.csv"), "CSV (*.csv)"
+            self, "Save CSV", str(OUTPUT_DIR / "transactions.csv"), "CSV (*.csv)"
         )
         if path:
             self._df.to_csv(path, index=False)
@@ -299,11 +305,23 @@ class ExtractWidget(QWidget):
         if self._df is None or self._df.empty:
             QMessageBox.information(self, "Save", "No data to save yet.")
             return
+        from datetime import datetime
         tpl_name = self._tpl_combo.currentText()
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         total = 0
-        for src in self._df.get("_source_file", pd.Series(dtype=str)).unique():
-            mask = self._df["_source_file"] == src if "_source_file" in self._df.columns else [True] * len(self._df)
-            rows = self._df[mask].to_dict("records")
-            total += insert_transactions(rows, source_file=src, template_name=tpl_name)
+        if "_source_file" in self._df.columns:
+            for src in self._df["_source_file"].dropna().unique():
+                batch_name = f"{Path(src).stem}__{timestamp}{Path(src).suffix}"
+                mask = self._df["_source_file"] == src
+                rows = self._df[mask].to_dict("records")
+                total += insert_transactions(
+                    rows, source_file=src, batch_name=batch_name, template_name=tpl_name
+                )
+        else:
+            batch_name = f"batch__{timestamp}"
+            rows = self._df.to_dict("records")
+            total += insert_transactions(
+                rows, source_file="unknown", batch_name=batch_name, template_name=tpl_name
+            )
         self.status_message.emit(f"Saved {total} rows to database")
         QMessageBox.information(self, "Saved", f"Saved {total} rows to database.")

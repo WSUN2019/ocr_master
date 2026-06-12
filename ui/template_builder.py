@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QLabel, QLineEdit, QComboBox,
     QGroupBox, QListWidget, QListWidgetItem,
     QFileDialog, QInputDialog, QMessageBox,
-    QDoubleSpinBox, QFormLayout, QScrollArea
+    QDoubleSpinBox, QFormLayout, QScrollArea, QCheckBox
 )
 from PIL import Image
 
@@ -36,6 +36,7 @@ class TemplateBuilderWidget(QWidget):
         super().__init__()
         self._source_img: Image.Image | None = None
         self._source_filename: str = ""
+        self._source_path: str = ""
         self._pending_rect: QRectF | None = None
         self._current_tpl: dict | None = None
         self._setup_ui()
@@ -94,6 +95,7 @@ class TemplateBuilderWidget(QWidget):
         self._canvas = CanvasWidget()
         self._canvas.box_drawn.connect(self._on_box_drawn)
         self._canvas.box_removed.connect(self._on_box_removed)
+        self._canvas.box_selected.connect(self._on_canvas_box_selected)
         splitter.addWidget(self._canvas)
 
         # Right panel
@@ -109,7 +111,17 @@ class TemplateBuilderWidget(QWidget):
 
         self._field_list = QListWidget()
         self._field_list.setAlternatingRowColors(True)
+        self._field_list.currentRowChanged.connect(self._on_field_row_changed)
         fg_layout.addWidget(self._field_list)
+
+        self._repeat_check = QCheckBox("Repeat on every row")
+        self._repeat_check.setToolTip(
+            "Fields like Bank Name or Account Number appear once on the statement\n"
+            "but should be copied into every transaction row."
+        )
+        self._repeat_check.setEnabled(False)
+        self._repeat_check.stateChanged.connect(self._on_repeat_toggled)
+        fg_layout.addWidget(self._repeat_check)
 
         btn_row = QHBoxLayout()
         btn_rm = QPushButton("Remove Selected Box")
@@ -170,14 +182,16 @@ class TemplateBuilderWidget(QWidget):
 
     # ── File open ─────────────────────────────────────────────────────────────
 
-    def _open_file(self):
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Open Statement Image",
-            str(Path.home()),
-            "Images & PDFs (*.jpg *.jpeg *.png *.pdf)"
-        )
+    def _open_file(self, path: str = ""):
+        if not path:
+            path, _ = QFileDialog.getOpenFileName(
+                self, "Open Statement Image",
+                str(Path.home()),
+                "Images & PDFs (*.jpg *.jpeg *.png *.pdf)"
+            )
         if not path:
             return
+        self._source_path = path
         self._source_filename = Path(path).name
         try:
             file_bytes = Path(path).read_bytes()
@@ -214,12 +228,51 @@ class TemplateBuilderWidget(QWidget):
         self._canvas.remove_selected_box()
         self._refresh_field_list()
 
+    def _on_canvas_box_selected(self, index: int):
+        """Canvas box was clicked — sync highlight in the field list."""
+        self._field_list.blockSignals(True)
+        self._field_list.setCurrentRow(index)
+        self._field_list.blockSignals(False)
+        self._sync_repeat_checkbox(index)
+
+    def _on_field_row_changed(self, row: int):
+        """Field list row clicked — select the matching box on the canvas."""
+        self._canvas.select_box_by_index(row)
+        self._sync_repeat_checkbox(row)
+
+    def _sync_repeat_checkbox(self, index: int):
+        """Update the repeat checkbox to reflect the selected box's current state."""
+        defs = self._canvas.get_field_defs()
+        if 0 <= index < len(defs):
+            self._repeat_check.blockSignals(True)
+            self._repeat_check.setChecked(defs[index].get("repeat", False))
+            self._repeat_check.setEnabled(True)
+            self._repeat_check.blockSignals(False)
+        else:
+            self._repeat_check.blockSignals(True)
+            self._repeat_check.setChecked(False)
+            self._repeat_check.setEnabled(False)
+            self._repeat_check.blockSignals(False)
+
+    def _on_repeat_toggled(self, state: int):
+        index = self._field_list.currentRow()
+        if index < 0:
+            return
+        self._canvas.set_box_repeat(index, bool(state))
+        self._refresh_field_list()
+
     def _refresh_field_list(self):
+        row = self._field_list.currentRow()
+        self._field_list.blockSignals(True)
         self._field_list.clear()
         for f in self._canvas.get_field_defs():
             bbox = f["bbox"]
-            text = f"{f['name']}  [{bbox[0]:.0f},{bbox[1]:.0f}  →  {bbox[2]:.0f},{bbox[3]:.0f}]"
+            prefix = "↺ " if f.get("repeat") else "   "
+            text = f"{prefix}{f['name']}  [{bbox[0]:.0f},{bbox[1]:.0f}  →  {bbox[2]:.0f},{bbox[3]:.0f}]"
             self._field_list.addItem(QListWidgetItem(text))
+        self._field_list.blockSignals(False)
+        if row >= 0:
+            self._field_list.setCurrentRow(row)
 
     # ── Template CRUD ─────────────────────────────────────────────────────────
 
@@ -256,8 +309,13 @@ class TemplateBuilderWidget(QWidget):
         # Always show field list from template data
         self._refresh_field_list_from_template(tpl)
 
-        # Draw boxes if an image is open
-        self._apply_template_to_canvas()
+        # Auto-load the sample image stored in the template (if still accessible)
+        saved_path = tpl.get("sample_image_path", "")
+        if saved_path and Path(saved_path).exists() and saved_path != self._source_path:
+            self._open_file(saved_path)
+        else:
+            # Draw boxes onto whichever image is already open
+            self._apply_template_to_canvas()
 
         if not self._source_img:
             self.status_message.emit(
@@ -333,6 +391,7 @@ class TemplateBuilderWidget(QWidget):
             page_height_pts=h,
             fields=fields,
             row_detection=rd,
+            sample_image_path=self._source_path,
         )
         slug = save_template(tpl)
         self._refresh_template_list()
