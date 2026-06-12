@@ -1,0 +1,39 @@
+# Database — contains financial data, never commit
+ocr_master.db
+*.db
+*.db-shm
+*.db-wal
+
+# Uploaded PDFs — contain personal financial data
+*.pdf
+
+# Saved templates may contain bbox coords derived from personal docs
+# Comment this out if you want to version-control your templates
+# templates/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.eggs/
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Streamlit cache
+.streamlit/cache/
