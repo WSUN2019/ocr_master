@@ -1,0 +1,381 @@
+"""
+Template Builder — open an image, draw red boxes, label fields, save template.
+"""
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from PyQt6.QtCore import Qt, QRectF, pyqtSignal
+from PyQt6.QtGui import QFont
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
+    QPushButton, QLabel, QLineEdit, QComboBox,
+    QGroupBox, QListWidget, QListWidgetItem,
+    QFileDialog, QInputDialog, QMessageBox,
+    QDoubleSpinBox, QFormLayout, QScrollArea
+)
+from PIL import Image
+
+from core.renderer import render_image, open_source_image
+from core.template import (
+    list_templates, load_template, save_template,
+    delete_template, build_template
+)
+from ui.canvas_widget import CanvasWidget
+
+PRESET_FIELDS = [
+    "transaction_date", "post_date", "description",
+    "amount", "balance", "account_number", "statement_period",
+]
+
+
+class TemplateBuilderWidget(QWidget):
+    status_message = pyqtSignal(str)
+
+    def __init__(self):
+        super().__init__()
+        self._source_img: Image.Image | None = None
+        self._source_filename: str = ""
+        self._pending_rect: QRectF | None = None
+        self._current_tpl: dict | None = None
+        self._setup_ui()
+        self._refresh_template_list()
+
+    def _setup_ui(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(16, 16, 16, 16)
+        root.setSpacing(10)
+
+        # ── Title row ─────────────────────────────────────────────────────────
+        title_row = QHBoxLayout()
+        lbl = QLabel("Template Builder")
+        lbl.setObjectName("section_title")
+        lbl.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
+        title_row.addWidget(lbl)
+        title_row.addStretch()
+
+        btn_open = QPushButton("Open Image / PDF")
+        btn_open.setObjectName("btn_primary")
+        btn_open.clicked.connect(self._open_file)
+        title_row.addWidget(btn_open)
+
+        btn_fit = QPushButton("Fit Image")
+        btn_fit.clicked.connect(lambda: self._canvas.fit_image())
+        btn_fit.setToolTip("Reset zoom so the full image fits in the canvas")
+        title_row.addWidget(btn_fit)
+
+        root.addLayout(title_row)
+
+        # ── Template selector ─────────────────────────────────────────────────
+        tpl_row = QHBoxLayout()
+        tpl_row.addWidget(QLabel("Template:"))
+        self._tpl_combo = QComboBox()
+        self._tpl_combo.setMinimumWidth(200)
+        self._tpl_combo.currentIndexChanged.connect(self._load_selected_template)
+        tpl_row.addWidget(self._tpl_combo)
+
+        btn_new = QPushButton("New")
+        btn_new.clicked.connect(self._new_template)
+        tpl_row.addWidget(btn_new)
+
+        btn_del = QPushButton("Delete")
+        btn_del.setObjectName("btn_danger")
+        btn_del.clicked.connect(self._delete_template)
+        tpl_row.addWidget(btn_del)
+
+        tpl_row.addStretch()
+        root.addLayout(tpl_row)
+
+        # ── Main splitter: canvas | right panel ───────────────────────────────
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.setHandleWidth(4)
+
+        # Canvas
+        self._canvas = CanvasWidget()
+        self._canvas.box_drawn.connect(self._on_box_drawn)
+        self._canvas.box_removed.connect(self._on_box_removed)
+        splitter.addWidget(self._canvas)
+
+        # Right panel
+        right = QWidget()
+        right.setMaximumWidth(300)
+        right_layout = QVBoxLayout(right)
+        right_layout.setContentsMargins(8, 0, 0, 0)
+        right_layout.setSpacing(10)
+
+        # Field list
+        fg = QGroupBox("Fields (draw a box, then label it)")
+        fg_layout = QVBoxLayout(fg)
+
+        self._field_list = QListWidget()
+        self._field_list.setAlternatingRowColors(True)
+        fg_layout.addWidget(self._field_list)
+
+        btn_row = QHBoxLayout()
+        btn_rm = QPushButton("Remove Selected Box")
+        btn_rm.setObjectName("btn_danger")
+        btn_rm.clicked.connect(self._remove_selected)
+        btn_row.addWidget(btn_rm)
+        fg_layout.addLayout(btn_row)
+        right_layout.addWidget(fg)
+
+        # Row detection
+        rd_group = QGroupBox("Row Detection")
+        rd_form = QFormLayout(rd_group)
+        rd_form.setSpacing(8)
+
+        self._strategy_combo = QComboBox()
+        self._strategy_combo.addItem("fixed_regions  — draw full columns (recommended)", "fixed_regions")
+        self._strategy_combo.addItem("repeat_vertical  — draw one row, repeat at fixed height", "repeat_vertical")
+        rd_form.addRow("Strategy:", self._strategy_combo)
+
+        self._row_height = QDoubleSpinBox()
+        self._row_height.setRange(2.0, 500.0)
+        self._row_height.setValue(12.0)
+        self._row_height.setSuffix(" px")
+        rd_form.addRow("Row height:", self._row_height)
+
+        self._start_y = QDoubleSpinBox()
+        self._start_y.setRange(0.0, 99999.0)
+        self._start_y.setValue(0.0)
+        self._start_y.setSuffix(" px")
+        rd_form.addRow("Start Y:", self._start_y)
+
+        self._end_y = QDoubleSpinBox()
+        self._end_y.setRange(0.0, 99999.0)
+        self._end_y.setValue(800.0)
+        self._end_y.setSuffix(" px")
+        rd_form.addRow("End Y:", self._end_y)
+
+        right_layout.addWidget(rd_group)
+
+        # Template name + save
+        save_group = QGroupBox("Save")
+        save_layout = QVBoxLayout(save_group)
+        self._name_edit = QLineEdit()
+        self._name_edit.setPlaceholderText("e.g. Chase Checking 2024")
+        save_layout.addWidget(QLabel("Template name:"))
+        save_layout.addWidget(self._name_edit)
+
+        btn_save = QPushButton("Save Template")
+        btn_save.setObjectName("btn_primary")
+        btn_save.clicked.connect(self._save_template)
+        save_layout.addWidget(btn_save)
+        right_layout.addWidget(save_group)
+
+        right_layout.addStretch()
+        splitter.addWidget(right)
+        splitter.setSizes([900, 280])
+        root.addWidget(splitter)
+
+    # ── File open ─────────────────────────────────────────────────────────────
+
+    def _open_file(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Open Statement Image",
+            str(Path.home()),
+            "Images & PDFs (*.jpg *.jpeg *.png *.pdf)"
+        )
+        if not path:
+            return
+        self._source_filename = Path(path).name
+        try:
+            file_bytes = Path(path).read_bytes()
+            self._source_img = open_source_image(file_bytes, self._source_filename)
+        except Exception as e:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.critical(self, "Failed to open file", str(e))
+            return
+
+        self._canvas.set_image(self._source_img)
+        h = self._source_img.height
+        self._end_y.setValue(float(h))
+        self.status_message.emit(f"Loaded: {self._source_filename}  ({self._source_img.width}×{h} px)")
+
+        # If a template is already selected, draw its boxes onto the newly opened image
+        self._apply_template_to_canvas()
+
+    # ── Box drawing ───────────────────────────────────────────────────────────
+
+    def _on_box_drawn(self, rect: QRectF):
+        """User finished drawing — ask for a field name."""
+        dlg = _FieldNameDialog(PRESET_FIELDS, self)
+        if dlg.exec():
+            name = dlg.chosen_name()
+            if name:
+                self._canvas.add_named_box(rect, name)
+                self._refresh_field_list()
+        # If cancelled, box is discarded (not added to canvas)
+
+    def _on_box_removed(self, index: int):
+        self._refresh_field_list()
+
+    def _remove_selected(self):
+        self._canvas.remove_selected_box()
+        self._refresh_field_list()
+
+    def _refresh_field_list(self):
+        self._field_list.clear()
+        for f in self._canvas.get_field_defs():
+            bbox = f["bbox"]
+            text = f"{f['name']}  [{bbox[0]:.0f},{bbox[1]:.0f}  →  {bbox[2]:.0f},{bbox[3]:.0f}]"
+            self._field_list.addItem(QListWidgetItem(text))
+
+    # ── Template CRUD ─────────────────────────────────────────────────────────
+
+    def _refresh_template_list(self):
+        self._tpl_combo.blockSignals(True)
+        self._tpl_combo.clear()
+        self._tpl_combo.addItem("— New template —", None)
+        for t in list_templates():
+            self._tpl_combo.addItem(t["name"], t["slug"])
+        self._tpl_combo.blockSignals(False)
+
+    def _load_selected_template(self):
+        slug = self._tpl_combo.currentData()
+        if not slug:
+            self._canvas.clear_boxes()
+            self._refresh_field_list()
+            return
+        tpl = load_template(slug)
+        if not tpl:
+            return
+        self._current_tpl = tpl
+
+        # Populate settings
+        self._name_edit.setText(tpl.get("name", ""))
+        rd = tpl.get("row_detection", {})
+        strategy = rd.get("strategy", "fixed_regions")
+        idx = self._strategy_combo.findData(strategy)
+        if idx >= 0:
+            self._strategy_combo.setCurrentIndex(idx)
+        self._row_height.setValue(float(rd.get("row_height_pts", 12.0)))
+        self._start_y.setValue(float(rd.get("start_y_pts", 0.0)))
+        self._end_y.setValue(float(rd.get("end_y_pts", 800.0)))
+
+        # Always show field list from template data
+        self._refresh_field_list_from_template(tpl)
+
+        # Draw boxes if an image is open
+        self._apply_template_to_canvas()
+
+        if not self._source_img:
+            self.status_message.emit(
+                f"Template '{tpl.get('name','')}' loaded — open a sample image to see the field boxes"
+            )
+
+    def _apply_template_to_canvas(self):
+        """Draw the currently selected template's boxes onto the canvas (if image is open)."""
+        tpl = getattr(self, "_current_tpl", None)
+        if not tpl or not self._source_img:
+            return
+        self._canvas.load_boxes(
+            tpl.get("fields", []),
+            float(tpl.get("page_width_pts", self._source_img.width)),
+            float(tpl.get("page_height_pts", self._source_img.height)),
+        )
+        self._refresh_field_list()
+
+    def _refresh_field_list_from_template(self, tpl: dict):
+        """Show field list from template JSON (no image needed)."""
+        self._field_list.clear()
+        for f in tpl.get("fields", []):
+            bbox = f["bbox"]
+            text = f"{f['name']}  [{bbox[0]:.0f},{bbox[1]:.0f}  →  {bbox[2]:.0f},{bbox[3]:.0f}]"
+            self._field_list.addItem(QListWidgetItem(text))
+
+    def _new_template(self):
+        self._tpl_combo.setCurrentIndex(0)
+        self._name_edit.clear()
+        self._canvas.clear_boxes()
+        self._refresh_field_list()
+
+    def _delete_template(self):
+        slug = self._tpl_combo.currentData()
+        if not slug:
+            QMessageBox.information(self, "Delete", "No saved template selected.")
+            return
+        name = self._tpl_combo.currentText()
+        reply = QMessageBox.question(
+            self, "Delete Template",
+            f"Delete template '{name}'?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            delete_template(slug)
+            self._refresh_template_list()
+            self.status_message.emit(f"Deleted template '{name}'")
+
+    def _save_template(self):
+        name = self._name_edit.text().strip()
+        if not name:
+            QMessageBox.warning(self, "Save Template", "Please enter a template name.")
+            return
+        fields = self._canvas.get_field_defs()
+        if not fields:
+            QMessageBox.warning(self, "Save Template", "Draw at least one field box first.")
+            return
+
+        w = float(self._source_img.width) if self._source_img else 0.0
+        h = float(self._source_img.height) if self._source_img else 0.0
+
+        rd = {
+            "strategy": self._strategy_combo.currentData() or "fixed_regions",
+            "row_height_pts": self._row_height.value(),
+            "start_y_pts": self._start_y.value(),
+            "end_y_pts": self._end_y.value(),
+            "anchor_field": fields[0]["name"] if fields else "",
+        }
+
+        tpl = build_template(
+            name=name,
+            page_width_pts=w,
+            page_height_pts=h,
+            fields=fields,
+            row_detection=rd,
+        )
+        slug = save_template(tpl)
+        self._refresh_template_list()
+
+        # Select the just-saved template in the combo
+        idx = self._tpl_combo.findData(slug)
+        if idx >= 0:
+            self._tpl_combo.setCurrentIndex(idx)
+
+        self.status_message.emit(f"Saved template '{name}'")
+        QMessageBox.information(self, "Saved", f"Template '{name}' saved with {len(fields)} field(s).")
+
+
+# ── Field name dialog ─────────────────────────────────────────────────────────
+
+class _FieldNameDialog(QWidget):
+    """Minimal modal to choose or type a field name after drawing a box."""
+
+    def __init__(self, presets: list[str], parent=None):
+        super().__init__(parent)
+        from PyQt6.QtWidgets import QDialog, QDialogButtonBox
+        self._dialog = QDialog(parent)
+        self._dialog.setWindowTitle("Label this field")
+        self._dialog.setMinimumWidth(300)
+
+        layout = QVBoxLayout(self._dialog)
+        layout.addWidget(QLabel("Choose a preset or type a custom name:"))
+
+        self._combo = QComboBox()
+        self._combo.addItems(presets)
+        self._combo.setEditable(True)
+        self._combo.setCurrentText(presets[0])
+        layout.addWidget(self._combo)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self._dialog.accept)
+        buttons.rejected.connect(self._dialog.reject)
+        layout.addWidget(buttons)
+
+    def exec(self) -> bool:
+        return self._dialog.exec() == 1   # QDialog.DialogCode.Accepted == 1
+
+    def chosen_name(self) -> str:
+        return self._combo.currentText().strip()

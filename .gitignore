@@ -1,15 +1,30 @@
-# Database — contains financial data, never commit
+# ── Financial data — never commit any of this ─────────────────────────────────
+input_files/
+output/
+
+# Database
 ocr_master.db
 *.db
 *.db-shm
 *.db-wal
 
-# Uploaded PDFs — contain personal financial data
+# Statement files (any format)
 *.pdf
+*.jpg
+*.jpeg
+*.png
+*.tif
+*.tiff
 
-# Saved templates may contain bbox coords derived from personal docs
-# Comment this out if you want to version-control your templates
-# templates/
+# Exported data
+*.csv
+*.xlsx
+
+# Templates (contain layout coords derived from real statements)
+templates/
+
+# Logs
+*.log
 
 # Python
 __pycache__/
@@ -35,5 +50,5 @@ Thumbs.db
 *.swp
 *.swo
 
-# Streamlit cache
-.streamlit/cache/
+# Streamlit (legacy — no longer used)
+.streamlit/

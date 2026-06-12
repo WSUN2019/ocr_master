@@ -1,68 +1,41 @@
 """
 OCR Master — Bank Statement Extractor
-Entry point. Run with: streamlit run app.py
+Run:  python app.py   or   ./run.sh
 """
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent))
 
-import streamlit as st
+# Windows: set Tesseract path before any OCR import
+if sys.platform == "win32":
+    import pytesseract
+    pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+
+from PyQt6.QtWidgets import QApplication
+from PyQt6.QtGui import QIcon
+
+from ui.styles import DARK_THEME
+from ui.main_window import MainWindow
 from core.storage import init_db
 
-st.set_page_config(
-    page_title="OCR Master",
-    page_icon="📄",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
 
-init_db()
+def main():
+    app = QApplication(sys.argv)
+    app.setApplicationName("OCR Master")
+    app.setApplicationVersion("1.0")
+    app.setOrganizationName("OCR Master")
+    app.setStyleSheet(DARK_THEME)
 
-st.title("OCR Master")
-st.subheader("Bank Statement Extractor — 100% Local")
+    # Icon (optional — drop ocr_master.png next to app.py to use it)
+    icon_path = Path(__file__).parent / "ocr_master.png"
+    if icon_path.exists():
+        app.setWindowIcon(QIcon(str(icon_path)))
 
-st.markdown("""
-All processing happens on your machine. No data is sent externally.
+    init_db()
 
----
+    win = MainWindow()
+    win.show()
+    sys.exit(app.exec())
 
-### How to use
 
-| Step | Page | What you do |
-|------|------|-------------|
-| **1** | Template Builder | Upload a sample PDF, draw red boxes over each field, label them, save as a named template |
-| **2** | Extract | Upload your statements, pick the matching template, run extraction, review the table |
-| **3** | History | Browse all imported transactions, filter by date or template, export CSV |
-| **4** | Settings | Manage templates, backup or compact the database |
-
----
-
-### Quick start
-
-Use the **sidebar** to navigate between pages.
-
-> **Tip:** Start by going to **Template Builder** with one sample statement from each bank format you have.
-> Once you have templates A, B, C, D saved, batch-extract all your statements in **Extract**.
-""")
-
-st.divider()
-col1, col2, col3 = st.columns(3)
-from core.storage import query_transactions, query_import_log, db_size_mb
-from core.template import list_templates
-
-try:
-    df = query_transactions(limit=1)
-    total = query_transactions(limit=100000)
-    col1.metric("Total transactions", len(total))
-except Exception:
-    col1.metric("Total transactions", "—")
-
-try:
-    col2.metric("Templates saved", len(list_templates()))
-except Exception:
-    col2.metric("Templates saved", "—")
-
-try:
-    col3.metric("Database size", f"{db_size_mb():.2f} MB")
-except Exception:
-    col3.metric("Database size", "—")
+if __name__ == "__main__":
+    main()
