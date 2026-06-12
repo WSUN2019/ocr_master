@@ -23,6 +23,9 @@ ocr_master.db
 # Templates (contain layout coords derived from real statements)
 templates/
 
+# User preferences
+config.json
+
 # Logs
 *.log
 

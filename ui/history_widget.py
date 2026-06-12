@@ -1,6 +1,7 @@
 """
 History page — query SQLite transactions, filter, export CSV, delete batches.
 """
+import json
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -12,14 +13,15 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QComboBox, QTableView, QGroupBox, QLineEdit,
     QDateEdit, QAbstractItemView, QHeaderView,
-    QFileDialog, QMessageBox, QSpinBox
+    QFileDialog, QMessageBox, QSpinBox, QCheckBox
 )
 from PyQt6.QtCore import QDate
 
 from core.storage import query_transactions, query_import_log, delete_by_source, delete_by_batch, df_to_csv_bytes, init_db
 from core.template import template_names
 
-OUTPUT_DIR = Path(__file__).parent.parent / "output"
+OUTPUT_DIR  = Path(__file__).parent.parent / "output"
+CONFIG_PATH = Path(__file__).parent.parent / "config.json"
 
 
 class PandasModel(QAbstractTableModel):
@@ -56,6 +58,7 @@ class HistoryWidget(QWidget):
         init_db()
         self._df: pd.DataFrame | None = None
         self._setup_ui()
+        self._table.horizontalHeader().sectionMoved.connect(self._on_column_moved)
 
     def _setup_ui(self):
         root = QVBoxLayout(self)
@@ -71,18 +74,25 @@ class HistoryWidget(QWidget):
         filter_group = QGroupBox("Filters")
         filter_layout = QHBoxLayout(filter_group)
 
-        filter_layout.addWidget(QLabel("From:"))
+        self._date_check = QCheckBox("Date range:")
+        self._date_check.setChecked(False)
+        self._date_check.stateChanged.connect(self._on_date_filter_toggled)
+        filter_layout.addWidget(self._date_check)
+
         self._date_from = QDateEdit()
         self._date_from.setCalendarPopup(True)
         self._date_from.setDate(QDate.currentDate().addYears(-5))
         self._date_from.setDisplayFormat("yyyy-MM-dd")
+        self._date_from.setEnabled(False)
         filter_layout.addWidget(self._date_from)
 
-        filter_layout.addWidget(QLabel("To:"))
+        filter_layout.addWidget(QLabel("→"))
+
         self._date_to = QDateEdit()
         self._date_to.setCalendarPopup(True)
         self._date_to.setDate(QDate.currentDate())
         self._date_to.setDisplayFormat("yyyy-MM-dd")
+        self._date_to.setEnabled(False)
         filter_layout.addWidget(self._date_to)
 
         filter_layout.addWidget(QLabel("Template:"))
@@ -130,6 +140,7 @@ class HistoryWidget(QWidget):
         hdr.setStretchLastSection(False)
         hdr.setMinimumSectionSize(60)
         hdr.setDefaultSectionSize(130)
+        hdr.setSectionsMovable(True)
 
         self._table.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
         self._table.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
@@ -162,8 +173,75 @@ class HistoryWidget(QWidget):
         table_layout.addLayout(action_row)
         root.addWidget(table_group)
 
+    # ── Config persistence ────────────────────────────────────────────────────
+
+    def _load_config(self) -> dict:
+        try:
+            return json.loads(CONFIG_PATH.read_text())
+        except Exception:
+            return {}
+
+    def _save_config(self, data: dict):
+        try:
+            existing = self._load_config()
+            existing.update(data)
+            CONFIG_PATH.write_text(json.dumps(existing, indent=2))
+        except Exception:
+            pass
+
+    def _on_column_moved(self, logical: int, old_visual: int, new_visual: int):
+        """Save column order whenever the user drags a header."""
+        self._save_column_order()
+
+    def _save_column_order(self):
+        hdr = self._table.horizontalHeader()
+        proxy = self._table.model()
+        if not proxy:
+            return
+        source = proxy.sourceModel() if hasattr(proxy, "sourceModel") else proxy
+        order = []
+        for vis in range(hdr.count()):
+            logical = hdr.logicalIndex(vis)
+            name = source.headerData(logical, Qt.Orientation.Horizontal,
+                                     Qt.ItemDataRole.DisplayRole)
+            if name:
+                order.append(name)
+        self._save_config({"history_column_order": order})
+
+    def _restore_column_order(self):
+        saved = self._load_config().get("history_column_order", [])
+        if not saved:
+            return
+        hdr = self._table.horizontalHeader()
+        proxy = self._table.model()
+        if not proxy:
+            return
+        source = proxy.sourceModel() if hasattr(proxy, "sourceModel") else proxy
+
+        # Map column name → current logical index
+        col_map = {}
+        for i in range(source.columnCount()):
+            name = source.headerData(i, Qt.Orientation.Horizontal,
+                                     Qt.ItemDataRole.DisplayRole)
+            if name:
+                col_map[name] = i
+
+        # Move each saved column to its saved visual position
+        hdr.blockSignals(True)
+        for target_vis, col_name in enumerate(saved):
+            if col_name not in col_map:
+                continue
+            logical = col_map[col_name]
+            current_vis = hdr.visualIndex(logical)
+            if current_vis != target_vis:
+                hdr.moveSection(current_vis, target_vis)
+        hdr.blockSignals(False)
+
     def showEvent(self, event):
         super().showEvent(event)
+        self.refresh()
+
+    def refresh(self):
         self._refresh_filters()
         self._run_query_all()
 
@@ -182,11 +260,17 @@ class HistoryWidget(QWidget):
         )
         self._after_query()
 
+    def _on_date_filter_toggled(self, state: int):
+        enabled = bool(state)
+        self._date_from.setEnabled(enabled)
+        self._date_to.setEnabled(enabled)
+
     def _run_query(self):
         tpl = self._tpl_filter.currentData()
+        use_dates = self._date_check.isChecked()
         self._df = query_transactions(
-            date_from=self._date_from.date().toString("yyyy-MM-dd"),
-            date_to=self._date_to.date().toString("yyyy-MM-dd"),
+            date_from=self._date_from.date().toString("yyyy-MM-dd") if use_dates else None,
+            date_to=self._date_to.date().toString("yyyy-MM-dd") if use_dates else None,
             template_name=tpl,
             limit=self._limit_spin.value(),
         )
@@ -221,11 +305,14 @@ class HistoryWidget(QWidget):
         self._table.setModel(proxy)
         self._lbl_count.setText(f"{len(df)} rows")
 
-        # Size columns to content on first load, then leave them interactive
+        # Size columns to content, then restore user's saved column order
         hdr = self._table.horizontalHeader()
+        hdr.blockSignals(True)
         hdr.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self._table.resizeColumnsToContents()
         hdr.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        hdr.blockSignals(False)
+        self._restore_column_order()
 
     def _apply_search_filter(self, text: str):
         if self._df is None:

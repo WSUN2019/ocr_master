@@ -231,6 +231,18 @@ def df_to_csv_bytes(df: pd.DataFrame) -> bytes:
     return buf.getvalue().encode("utf-8")
 
 
+def wipe_db():
+    """Delete all rows from transactions and import_log. Keeps the DB file and schema."""
+    init_db()
+    with _conn() as con:
+        con.execute("DELETE FROM transactions")
+        con.execute("DELETE FROM import_log")
+    # VACUUM must run outside any transaction
+    con2 = _conn()
+    con2.execute("VACUUM")
+    con2.close()
+
+
 def vacuum_db():
     with _conn() as con:
         con.execute("VACUUM")

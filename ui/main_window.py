@@ -12,6 +12,7 @@ from ui.template_builder import TemplateBuilderWidget
 from ui.extract_widget import ExtractWidget
 from ui.history_widget import HistoryWidget
 from ui.settings_widget import SettingsWidget
+from ui.about_widget import AboutWidget
 
 
 class MainWindow(QMainWindow):
@@ -30,7 +31,7 @@ class MainWindow(QMainWindow):
         # ── Sidebar ───────────────────────────────────────────────────────────
         sidebar = QWidget()
         sidebar.setObjectName("sidebar")
-        sidebar.setFixedWidth(180)
+        sidebar.setFixedWidth(195)
         sb_layout = QVBoxLayout(sidebar)
         sb_layout.setContentsMargins(8, 0, 8, 16)
         sb_layout.setSpacing(4)
@@ -41,16 +42,18 @@ class MainWindow(QMainWindow):
         sb_layout.addWidget(title)
 
         subtitle = QLabel("Bank Statement Extractor")
-        subtitle.setStyleSheet("color: #606080; font-size: 10px; padding-left: 16px; padding-bottom: 12px;")
+        subtitle.setStyleSheet(
+            "color: #253449; font-size: 10px; padding-left: 20px; padding-bottom: 16px;"
+        )
         subtitle.setWordWrap(True)
         sb_layout.addWidget(subtitle)
 
         self._nav_buttons: list[QPushButton] = []
         nav_items = [
-            ("  Template Builder", "Map fields on a sample image"),
-            ("  Extract",          "Run OCR on statements"),
-            ("  History",          "Browse extracted data"),
-            ("  Settings",         "Templates & database"),
+            ("  \U0001f5fa  Template Builder", "Map fields on a sample image"),
+            ("  \U0001f4c4  Extract",           "Run OCR on statements"),
+            ("  \U0001f4ca  History",           "Browse extracted data"),
+            ("  ⚙️  Settings",        "Templates & database"),
         ]
         for text, tip in nav_items:
             btn = QPushButton(text)
@@ -62,6 +65,15 @@ class MainWindow(QMainWindow):
             sb_layout.addWidget(btn)
 
         sb_layout.addStretch()
+
+        # About button pinned to bottom of sidebar
+        btn_about = QPushButton("  ℹ️  About")
+        btn_about.setToolTip("About OCR Master")
+        btn_about.setProperty("active", "false")
+        btn_about.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self._nav_buttons.append(btn_about)
+        sb_layout.addWidget(btn_about)
+
         root_layout.addWidget(sidebar)
 
         # ── Stacked content ───────────────────────────────────────────────────
@@ -72,11 +84,12 @@ class MainWindow(QMainWindow):
         self._extract_widget   = ExtractWidget()
         self._history_widget   = HistoryWidget()
         self._settings_widget  = SettingsWidget()
+        self._about_widget     = AboutWidget()
 
-        self._stack.addWidget(self._template_builder)
-        self._stack.addWidget(self._extract_widget)
-        self._stack.addWidget(self._history_widget)
-        self._stack.addWidget(self._settings_widget)
+        for w in [self._template_builder, self._extract_widget,
+                  self._history_widget, self._settings_widget,
+                  self._about_widget]:
+            self._stack.addWidget(w)
 
         root_layout.addWidget(self._stack)
 
@@ -91,7 +104,6 @@ class MainWindow(QMainWindow):
 
         self._navigate(0)
 
-        # Forward status messages from child widgets
         for w in [self._template_builder, self._extract_widget,
                   self._history_widget, self._settings_widget]:
             if hasattr(w, "status_message"):
@@ -103,3 +115,6 @@ class MainWindow(QMainWindow):
             btn.setProperty("active", "true" if i == index else "false")
             btn.style().unpolish(btn)
             btn.style().polish(btn)
+        widget = self._stack.currentWidget()
+        if hasattr(widget, "refresh"):
+            widget.refresh()

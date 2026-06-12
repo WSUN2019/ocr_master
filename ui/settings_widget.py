@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
     QFileDialog, QMessageBox, QLineEdit, QFormLayout
 )
 
-from core.storage import vacuum_db, db_size_mb, init_db, DB_PATH
+from core.storage import vacuum_db, wipe_db, db_size_mb, init_db, DB_PATH
 from core.template import list_templates, load_template, delete_template, save_template
 
 
@@ -102,7 +102,7 @@ class SettingsWidget(QWidget):
         db_layout.addWidget(db_path_lbl)
 
         btn_row2 = QHBoxLayout()
-        btn_vacuum = QPushButton("Compact Database (VACUUM)")
+        btn_vacuum = QPushButton("Compact (VACUUM)")
         btn_vacuum.clicked.connect(self._vacuum)
         btn_row2.addWidget(btn_vacuum)
 
@@ -110,6 +110,12 @@ class SettingsWidget(QWidget):
         btn_backup.setObjectName("btn_primary")
         btn_backup.clicked.connect(self._backup_db)
         btn_row2.addWidget(btn_backup)
+
+        btn_wipe = QPushButton("Wipe All Data…")
+        btn_wipe.setObjectName("btn_danger")
+        btn_wipe.setToolTip("Permanently delete every transaction and import log from the database")
+        btn_wipe.clicked.connect(self._wipe_db)
+        btn_row2.addWidget(btn_wipe)
 
         btn_row2.addStretch()
         db_layout.addLayout(btn_row2)
@@ -120,6 +126,9 @@ class SettingsWidget(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
+        self.refresh()
+
+    def refresh(self):
         self._refresh_templates()
         self._db_size_lbl.setText(f"Size: {db_size_mb():.3f} MB")
 
@@ -212,6 +221,30 @@ class SettingsWidget(QWidget):
                 "Windows: install from https://github.com/UB-Mannheim/tesseract/wiki")
 
     # ── Database ──────────────────────────────────────────────────────────────
+
+    def _wipe_db(self):
+        reply = QMessageBox.warning(
+            self, "Wipe Database",
+            "This will permanently delete ALL transactions and import logs.\n\n"
+            "This cannot be undone. Back up the database first if needed.\n\n"
+            "Are you absolutely sure?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        # Second confirmation — type check
+        from PyQt6.QtWidgets import QInputDialog
+        text, ok = QInputDialog.getText(
+            self, "Confirm Wipe", "Type  WIPE  to confirm:"
+        )
+        if not ok or text.strip().upper() != "WIPE":
+            QMessageBox.information(self, "Cancelled", "Database was not wiped.")
+            return
+        wipe_db()
+        self._db_size_lbl.setText(f"Size: {db_size_mb():.3f} MB")
+        self.status_message.emit("Database wiped — all transactions deleted")
+        QMessageBox.information(self, "Done", "All transactions and import logs have been deleted.")
 
     def _vacuum(self):
         vacuum_db()
