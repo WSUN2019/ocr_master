@@ -8,11 +8,12 @@ ocr_master.db
 *.db-shm
 *.db-wal
 
-# Statement files (any format)
+# Statement files (any format) — but allow docs/ screenshots
 *.pdf
 *.jpg
 *.jpeg
 *.png
+!docs/*.png
 *.tif
 *.tiff
 

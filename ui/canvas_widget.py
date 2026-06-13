@@ -114,17 +114,27 @@ class _ResizeHandle(QGraphicsRectItem):
             super().mouseReleaseEvent(event)
 
 
-REPEAT_PEN   = QPen(QColor(255, 200, 0), 2, Qt.PenStyle.DashLine)
-REPEAT_BRUSH = QBrush(QColor(255, 200, 0, 40))
+REPEAT_PEN      = QPen(QColor(255, 200, 0),   2, Qt.PenStyle.DashLine)
+REPEAT_BRUSH    = QBrush(QColor(255, 200, 0,  40))
+SUBGROUP_PEN    = QPen(QColor(6,  182, 212),  2, Qt.PenStyle.DashDotLine)
+SUBGROUP_BRUSH  = QBrush(QColor(6, 182, 212,  35))
 
 
 class BoxItem(QGraphicsRectItem):
-    """A labelled red bounding box with 8 resize handles that appear on selection."""
+    """A labelled bounding box with 8 resize handles that appear on selection.
 
-    def __init__(self, rect: QRectF, field_name: str = "", repeat: bool = False):
+    Colours:
+      red solid       — normal field
+      yellow dashed   — repeat (header value stamped on every row)
+      teal dash-dot   — sub_group (value shared across a group of rows; fill-forward)
+    """
+
+    def __init__(self, rect: QRectF, field_name: str = "",
+                 repeat: bool = False, sub_group: bool = False):
         super().__init__(rect)
         self.field_name = field_name
-        self.repeat = repeat
+        self.repeat    = repeat
+        self.sub_group = sub_group
         self._apply_style()
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable)
@@ -135,7 +145,10 @@ class BoxItem(QGraphicsRectItem):
         self._update_handles()
 
     def _apply_style(self):
-        if self.repeat:
+        if self.sub_group:
+            self.setPen(SUBGROUP_PEN)
+            self.setBrush(SUBGROUP_BRUSH)
+        elif self.repeat:
             self.setPen(REPEAT_PEN)
             self.setBrush(REPEAT_BRUSH)
         else:
@@ -143,11 +156,24 @@ class BoxItem(QGraphicsRectItem):
             self.setBrush(RED_BRUSH)
 
     def _update_tooltip(self):
-        suffix = " [repeats every row]" if self.repeat else ""
+        if self.sub_group:
+            suffix = " [sub-group: value shared across rows]"
+        elif self.repeat:
+            suffix = " [repeats every row]"
+        else:
+            suffix = ""
         self.setToolTip(f"{self.field_name}{suffix}")
 
     def set_repeat(self, value: bool):
         self.repeat = value
+        self.sub_group = False  # mutually exclusive
+        self._apply_style()
+        self._update_tooltip()
+        self.update()
+
+    def set_sub_group(self, value: bool):
+        self.sub_group = value
+        self.repeat = False  # mutually exclusive
         self._apply_style()
         self._update_tooltip()
         self.update()
@@ -167,7 +193,12 @@ class BoxItem(QGraphicsRectItem):
         if self.field_name:
             painter.setPen(QPen(QColor(255, 255, 255)))
             r = self.rect()
-            label = f"↺ {self.field_name}" if self.repeat else self.field_name
+            if self.sub_group:
+                label = f"⊞ {self.field_name}"
+            elif self.repeat:
+                label = f"↺ {self.field_name}"
+            else:
+                label = self.field_name
             painter.drawText(int(r.x()) + 3, int(r.y()) + 14, label)
 
 
@@ -248,6 +279,14 @@ class CanvasWidget(QGraphicsView):
             self.fitInView(self._pixmap_item, Qt.AspectRatioMode.KeepAspectRatio)
             self.viewport().update()
 
+    def clear_image(self):
+        """Remove the background image and all boxes, leaving a blank canvas."""
+        self._scene.clear()
+        self._boxes.clear()
+        self._pixmap_item = None
+        self._image_loaded = False
+        self._temp_rect = None
+
     # ── Box management ────────────────────────────────────────────────────────
 
     def clear_boxes(self):
@@ -260,20 +299,27 @@ class CanvasWidget(QGraphicsView):
         for f in field_defs:
             x0, y0, x1, y1 = f["bbox"]
             self._add_box(QRectF(x0, y0, x1 - x0, y1 - y0), f["name"],
-                          repeat=f.get("repeat", False))
+                          repeat=f.get("repeat", False),
+                          sub_group=f.get("sub_group", False))
 
-    def _add_box(self, rect: QRectF, field_name: str, repeat: bool = False) -> BoxItem:
-        box = BoxItem(rect, field_name, repeat=repeat)
+    def _add_box(self, rect: QRectF, field_name: str,
+                 repeat: bool = False, sub_group: bool = False) -> BoxItem:
+        box = BoxItem(rect, field_name, repeat=repeat, sub_group=sub_group)
         self._scene.addItem(box)
         self._boxes.append(box)
         return box
 
-    def add_named_box(self, rect: QRectF, field_name: str):
-        self._add_box(rect, field_name)
+    def add_named_box(self, rect: QRectF, field_name: str,
+                      repeat: bool = False, sub_group: bool = False):
+        self._add_box(rect, field_name, repeat=repeat, sub_group=sub_group)
 
     def set_box_repeat(self, index: int, value: bool):
         if 0 <= index < len(self._boxes):
             self._boxes[index].set_repeat(value)
+
+    def set_box_sub_group(self, index: int, value: bool):
+        if 0 <= index < len(self._boxes):
+            self._boxes[index].set_sub_group(value)
 
     def remove_selected_box(self):
         for i, box in enumerate(self._boxes):
@@ -288,12 +334,13 @@ class CanvasWidget(QGraphicsView):
         for box in self._boxes:
             r = box.sceneBoundingRect()
             defs.append({
-                "name":   box.field_name,
-                "label":  box.field_name.replace("_", " ").title(),
-                "page":   0,
-                "bbox":   [round(r.x(), 2), round(r.y(), 2),
-                           round(r.x() + r.width(), 2), round(r.y() + r.height(), 2)],
-                "repeat": box.repeat,
+                "name":      box.field_name,
+                "label":     box.field_name.replace("_", " ").title(),
+                "page":      0,
+                "bbox":      [round(r.x(), 2), round(r.y(), 2),
+                              round(r.x() + r.width(), 2), round(r.y() + r.height(), 2)],
+                "repeat":    box.repeat,
+                "sub_group": box.sub_group,
             })
         return defs
 

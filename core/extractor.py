@@ -312,6 +312,19 @@ def extract_with_template(file_bytes: bytes, filename: str, template: dict) -> l
             rows = _extract_fixed_regions(words, fields, amount_fields, date_fields, page_num)
         all_rows.extend(rows)
 
+    # Fill-forward for sub_group fields: value appears once per group of rows;
+    # blank rows in the group inherit the last seen non-None value (date, balance, etc.)
+    sub_group_fields = [f["name"] for f in fields if f.get("sub_group", False)]
+    if sub_group_fields and all_rows:
+        last_seen: dict[str, object] = {}
+        for row in all_rows:
+            for fname in sub_group_fields:
+                val = row.get(fname)
+                if val is not None:
+                    last_seen[fname] = val
+                elif fname in last_seen:
+                    row[fname] = last_seen[fname]
+
     return all_rows
 
 

@@ -366,6 +366,12 @@ QListWidget {
 QListWidget::item {
     padding: 6px 10px;
     border-radius: 4px;
+    color: #e2e8f0;
+}
+
+QListWidget::item:alternate {
+    background-color: #111827;
+    color: #e2e8f0;
 }
 
 QListWidget::item:selected {

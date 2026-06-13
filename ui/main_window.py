@@ -12,6 +12,7 @@ from ui.template_builder import TemplateBuilderWidget
 from ui.extract_widget import ExtractWidget
 from ui.history_widget import HistoryWidget
 from ui.settings_widget import SettingsWidget
+from ui.help_widget import HelpWidget
 from ui.about_widget import AboutWidget
 
 
@@ -54,6 +55,8 @@ class MainWindow(QMainWindow):
             ("  \U0001f4c4  Extract",           "Run OCR on statements"),
             ("  \U0001f4ca  History",           "Browse extracted data"),
             ("  ⚙️  Settings",        "Templates & database"),
+            ("  ❓  How to Use",      "Workflow guide & diagram"),
+            ("  ℹ️  About",           "About OCR Master"),
         ]
         for text, tip in nav_items:
             btn = QPushButton(text)
@@ -66,14 +69,6 @@ class MainWindow(QMainWindow):
 
         sb_layout.addStretch()
 
-        # About button pinned to bottom of sidebar
-        btn_about = QPushButton("  ℹ️  About")
-        btn_about.setToolTip("About OCR Master")
-        btn_about.setProperty("active", "false")
-        btn_about.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self._nav_buttons.append(btn_about)
-        sb_layout.addWidget(btn_about)
-
         root_layout.addWidget(sidebar)
 
         # ── Stacked content ───────────────────────────────────────────────────
@@ -84,11 +79,12 @@ class MainWindow(QMainWindow):
         self._extract_widget   = ExtractWidget()
         self._history_widget   = HistoryWidget()
         self._settings_widget  = SettingsWidget()
+        self._help_widget      = HelpWidget()
         self._about_widget     = AboutWidget()
 
         for w in [self._template_builder, self._extract_widget,
                   self._history_widget, self._settings_widget,
-                  self._about_widget]:
+                  self._help_widget, self._about_widget]:
             self._stack.addWidget(w)
 
         root_layout.addWidget(self._stack)

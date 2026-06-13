@@ -12,25 +12,36 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QComboBox, QTableView, QProgressBar, QFileDialog,
     QGroupBox, QAbstractItemView, QHeaderView, QTextEdit,
-    QMessageBox, QSplitter, QListWidget, QListWidgetItem
+    QMessageBox, QSplitter, QListWidget, QListWidgetItem, QMenu
 )
+from PyQt6.QtGui import QAction
 
 from core.storage import insert_transactions, df_to_csv_bytes, init_db
 from core.template import list_templates, load_template
 from core.extractor import tesseract_available
 from ui.ocr_worker import OcrWorker
+from ui.history_widget import _add_balance_check
 
 APP_DIR    = Path(__file__).parent.parent
 INPUT_DIR  = APP_DIR / "input_files"
 OUTPUT_DIR = APP_DIR / "output"
 
 
-# ── Pandas table model ────────────────────────────────────────────────────────
+# ── Pandas table model (editable) ────────────────────────────────────────────
+
+_READONLY_EXTRACT  = frozenset({"balance_check"})   # computed cols — not editable
+_BALANCE_TRIGGER   = ("balance", "debit", "credit", "amount")
+
 
 class PandasModel(QAbstractTableModel):
+    _NOTE_BG = QColor(59, 130, 246, 35)
+
     def __init__(self, df: pd.DataFrame):
         super().__init__()
         self._df = df.copy()
+        # Ensure a note column exists for override tracking
+        if "note" not in self._df.columns:
+            self._df["note"] = None
 
     def rowCount(self, parent=QModelIndex()): return len(self._df)
     def columnCount(self, parent=QModelIndex()): return len(self._df.columns)
@@ -39,10 +50,28 @@ class PandasModel(QAbstractTableModel):
         if not index.isValid():
             return None
         val = self._df.iloc[index.row(), index.column()]
-        if role == Qt.ItemDataRole.DisplayRole:
+        col = self._df.columns[index.column()]
+
+        if role in (Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole):
             return "" if pd.isna(val) else str(val)
-        if role == Qt.ItemDataRole.BackgroundRole and index.row() % 2:
-            return QColor(26, 37, 64)
+
+        if col == "balance_check":
+            text = "" if pd.isna(val) else str(val)
+            if role == Qt.ItemDataRole.ForegroundRole:
+                if text.startswith("✓"): return QColor("#10b981")
+                if text.startswith("✗"): return QColor("#ef4444")
+            if role == Qt.ItemDataRole.BackgroundRole:
+                if text.startswith("✓"): return QColor(16, 185, 129, 30)
+                if text.startswith("✗"): return QColor(239, 68,  68,  30)
+            return None
+
+        if role == Qt.ItemDataRole.BackgroundRole:
+            note = self._df["note"].iloc[index.row()]
+            if pd.notna(note) and str(note).strip():
+                return self._NOTE_BG
+            if index.row() % 2:
+                return QColor(26, 37, 64)
+
         return None
 
     def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
@@ -51,6 +80,62 @@ class PandasModel(QAbstractTableModel):
         if orientation == Qt.Orientation.Horizontal:
             return str(self._df.columns[section])
         return str(section + 1)
+
+    def flags(self, index):
+        base = super().flags(index)
+        col = self._df.columns[index.column()]
+        if col in _READONLY_EXTRACT or col.startswith("_"):
+            return base
+        return base | Qt.ItemFlag.ItemIsEditable
+
+    def setData(self, index, value, role=Qt.ItemDataRole.EditRole):
+        if role != Qt.ItemDataRole.EditRole:
+            return False
+        col = self._df.columns[index.column()]
+        if col in _READONLY_EXTRACT or col.startswith("_"):
+            return False
+        new_val = str(value).strip()
+        row = index.row()
+        df_idx = self._df.index[row]
+
+        old_raw = self._df.at[df_idx, col]
+        old_val = "" if pd.isna(old_raw) else str(old_raw).strip()
+        if old_val == new_val:
+            return False
+
+        if self._df[col].dtype != object:
+            self._df[col] = self._df[col].astype(object)
+        self._df.at[df_idx, col] = new_val
+        self.dataChanged.emit(index, index, [role])
+
+        if col != "note":
+            note = f"Manual override: [{col}] {old_val!r} → {new_val!r}"
+            self._df.at[df_idx, "note"] = note
+            if "note" in self._df.columns:
+                note_col = list(self._df.columns).index("note")
+                note_idx = self.index(row, note_col)
+                self.dataChanged.emit(note_idx, note_idx, [Qt.ItemDataRole.DisplayRole])
+
+        if any(k in col.lower() for k in _BALANCE_TRIGGER):
+            self._recompute_balance_check()
+
+        return True
+
+    def _recompute_balance_check(self):
+        base = self._df.drop(columns=["balance_check"], errors="ignore")
+        new_df = _add_balance_check(base)
+        if "balance_check" not in new_df.columns:
+            return
+        self._df["balance_check"] = new_df["balance_check"].values
+        if "balance_check" in self._df.columns:
+            c = list(self._df.columns).index("balance_check")
+            self.dataChanged.emit(
+                self.index(0, c),
+                self.index(len(self._df) - 1, c),
+                [Qt.ItemDataRole.DisplayRole,
+                 Qt.ItemDataRole.ForegroundRole,
+                 Qt.ItemDataRole.BackgroundRole],
+            )
 
     def get_df(self): return self._df
 
@@ -64,6 +149,7 @@ class ExtractWidget(QWidget):
         super().__init__()
         init_db()
         self._worker: OcrWorker | None = None
+        self._model: PandasModel | None = None
         self._all_rows: list[dict] = []
         self._df: pd.DataFrame | None = None
         self._setup_ui()
@@ -73,11 +159,18 @@ class ExtractWidget(QWidget):
         root.setContentsMargins(16, 16, 16, 16)
         root.setSpacing(10)
 
-        # Title
+        # Title row
+        title_row = QHBoxLayout()
         title = QLabel("Extract Transactions")
         title.setObjectName("section_title")
         title.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
-        root.addWidget(title)
+        title_row.addWidget(title)
+        title_row.addStretch()
+        btn_new = QPushButton("New Extract")
+        btn_new.setToolTip("Clear files and results to start a fresh extraction")
+        btn_new.clicked.connect(self._new_extract)
+        title_row.addWidget(btn_new)
+        root.addLayout(title_row)
 
         # ── Top controls ──────────────────────────────────────────────────────
         ctrl_group = QGroupBox("Setup")
@@ -134,6 +227,10 @@ class ExtractWidget(QWidget):
         left_layout = QVBoxLayout(left)
         self._file_list = QListWidget()
         self._file_list.setAlternatingRowColors(True)
+        self._file_list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        self._file_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._file_list.customContextMenuRequested.connect(self._file_list_context_menu)
+        self._file_list.keyPressEvent = self._file_list_key_press
         left_layout.addWidget(self._file_list)
         splitter.addWidget(left)
 
@@ -204,6 +301,41 @@ class ExtractWidget(QWidget):
 
     def _clear_files(self):
         self._file_list.clear()
+
+    def _remove_selected_files(self):
+        for item in self._file_list.selectedItems():
+            self._file_list.takeItem(self._file_list.row(item))
+
+    def _file_list_context_menu(self, pos):
+        if not self._file_list.selectedItems():
+            return
+        menu = QMenu(self)
+        act = QAction(f"Remove {len(self._file_list.selectedItems())} file(s)", self)
+        act.triggered.connect(self._remove_selected_files)
+        menu.addAction(act)
+        menu.exec(self._file_list.mapToGlobal(pos))
+
+    def _file_list_key_press(self, event):
+        if event.key() == Qt.Key.Key_Delete:
+            self._remove_selected_files()
+        else:
+            QListWidget.keyPressEvent(self._file_list, event)
+
+    def _new_extract(self):
+        """Reset everything for a fresh extraction session."""
+        if self._worker is not None:
+            self._worker.cancel()
+            self._worker = None
+        self._file_list.clear()
+        self._table.setModel(None)
+        self._model = None
+        self._df = None
+        self._lbl_count.setText("No data")
+        self._status_lbl.setText("")
+        self._progress.setVisible(False)
+        self._btn_run.setEnabled(True)
+        self._btn_cancel.setEnabled(False)
+        self.status_message.emit("Ready for new extraction")
 
     def _file_paths(self) -> list[str]:
         return [self._file_list.item(i).data(Qt.ItemDataRole.UserRole)
@@ -280,8 +412,11 @@ class ExtractWidget(QWidget):
         back  = [c for c in self._df.columns if c.startswith("_")]
         self._df = self._df[front + back]
 
-        model = PandasModel(self._df)
-        self._table.setModel(model)
+        # Add balance validation column if balance/debit/credit present
+        display_df = _add_balance_check(self._df)
+
+        self._model = PandasModel(display_df)
+        self._table.setModel(self._model)
         self._lbl_count.setText(f"{len(self._df)} rows extracted")
         self._status_lbl.setText(f"Done — {len(self._df)} rows from {len(set(r.get('_source_file','') for r in all_rows))} file(s)")
         self.status_message.emit(f"Extracted {len(self._df)} rows")
@@ -302,24 +437,31 @@ class ExtractWidget(QWidget):
             QMessageBox.information(self, "Exported", f"Saved {len(self._df)} rows to:\n{path}")
 
     def _save_to_db(self):
-        if self._df is None or self._df.empty:
+        if self._model is None:
+            QMessageBox.information(self, "Save", "No data to save yet.")
+            return
+        # Use the model's df so any inline edits are captured
+        df = self._model.get_df()
+        # Drop computed columns that aren't real fields
+        df = df.drop(columns=[c for c in ("balance_check",) if c in df.columns])
+        if df.empty:
             QMessageBox.information(self, "Save", "No data to save yet.")
             return
         from datetime import datetime
         tpl_name = self._tpl_combo.currentText()
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         total = 0
-        if "_source_file" in self._df.columns:
-            for src in self._df["_source_file"].dropna().unique():
+        if "_source_file" in df.columns:
+            for src in df["_source_file"].dropna().unique():
                 batch_name = f"{Path(src).stem}__{timestamp}{Path(src).suffix}"
-                mask = self._df["_source_file"] == src
-                rows = self._df[mask].to_dict("records")
+                mask = df["_source_file"] == src
+                rows = df[mask].to_dict("records")
                 total += insert_transactions(
                     rows, source_file=src, batch_name=batch_name, template_name=tpl_name
                 )
         else:
             batch_name = f"batch__{timestamp}"
-            rows = self._df.to_dict("records")
+            rows = df.to_dict("records")
             total += insert_transactions(
                 rows, source_file="unknown", batch_name=batch_name, template_name=tpl_name
             )

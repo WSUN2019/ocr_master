@@ -23,10 +23,11 @@ from core.template import (
 )
 from ui.canvas_widget import CanvasWidget
 
-PRESET_FIELDS = [
-    "transaction_date", "post_date", "description",
-    "amount", "balance", "account_number", "statement_period",
-]
+PRESET_FIELDS = sorted([
+    "account_number", "amount", "balance", "bank_name",
+    "credit", "debit", "description", "post_date",
+    "statement_period", "transaction_date",
+])
 
 
 class TemplateBuilderWidget(QWidget):
@@ -123,6 +124,17 @@ class TemplateBuilderWidget(QWidget):
         self._repeat_check.stateChanged.connect(self._on_repeat_toggled)
         fg_layout.addWidget(self._repeat_check)
 
+        self._subgroup_check = QCheckBox("Sub-group field")
+        self._subgroup_check.setToolTip(
+            "Fields like Date or Balance that appear once per group of rows\n"
+            "(e.g. Royal Bank of Scotland: one date covers 4 sub-rows).\n"
+            "Value is carried forward to rows where it is blank.\n"
+            "Balance check will sum debits/credits across the whole group."
+        )
+        self._subgroup_check.setEnabled(False)
+        self._subgroup_check.stateChanged.connect(self._on_subgroup_toggled)
+        fg_layout.addWidget(self._subgroup_check)
+
         btn_row = QHBoxLayout()
         btn_rm = QPushButton("Remove Selected Box")
         btn_rm.setObjectName("btn_danger")
@@ -184,9 +196,11 @@ class TemplateBuilderWidget(QWidget):
 
     def _open_file(self, path: str = ""):
         if not path:
+            start_dir = Path(__file__).parent.parent / "input_files"
+            start_dir.mkdir(exist_ok=True)
             path, _ = QFileDialog.getOpenFileName(
                 self, "Open Statement Image",
-                str(Path.home()),
+                str(start_dir),
                 "Images & PDFs (*.jpg *.jpeg *.png *.pdf)"
             )
         if not path:
@@ -212,12 +226,16 @@ class TemplateBuilderWidget(QWidget):
     # ── Box drawing ───────────────────────────────────────────────────────────
 
     def _on_box_drawn(self, rect: QRectF):
-        """User finished drawing — ask for a field name."""
+        """User finished drawing — ask for a field name and flags."""
         dlg = _FieldNameDialog(PRESET_FIELDS, self)
         if dlg.exec():
             name = dlg.chosen_name()
             if name:
-                self._canvas.add_named_box(rect, name)
+                self._canvas.add_named_box(
+                    rect, name,
+                    repeat=dlg.repeat(),
+                    sub_group=dlg.sub_group(),
+                )
                 self._refresh_field_list()
         # If cancelled, box is discarded (not added to canvas)
 
@@ -233,32 +251,49 @@ class TemplateBuilderWidget(QWidget):
         self._field_list.blockSignals(True)
         self._field_list.setCurrentRow(index)
         self._field_list.blockSignals(False)
-        self._sync_repeat_checkbox(index)
+        self._sync_field_checkboxes(index)
 
     def _on_field_row_changed(self, row: int):
         """Field list row clicked — select the matching box on the canvas."""
         self._canvas.select_box_by_index(row)
-        self._sync_repeat_checkbox(row)
+        self._sync_field_checkboxes(row)
 
-    def _sync_repeat_checkbox(self, index: int):
-        """Update the repeat checkbox to reflect the selected box's current state."""
+    def _sync_field_checkboxes(self, index: int):
+        """Update repeat + sub_group checkboxes from the selected box state."""
         defs = self._canvas.get_field_defs()
-        if 0 <= index < len(defs):
-            self._repeat_check.blockSignals(True)
-            self._repeat_check.setChecked(defs[index].get("repeat", False))
-            self._repeat_check.setEnabled(True)
-            self._repeat_check.blockSignals(False)
-        else:
-            self._repeat_check.blockSignals(True)
-            self._repeat_check.setChecked(False)
-            self._repeat_check.setEnabled(False)
-            self._repeat_check.blockSignals(False)
+        has = 0 <= index < len(defs)
+        for cb, key in ((self._repeat_check, "repeat"), (self._subgroup_check, "sub_group")):
+            cb.blockSignals(True)
+            cb.setChecked(defs[index].get(key, False) if has else False)
+            cb.setEnabled(has)
+            cb.blockSignals(False)
+
+    # keep old name as alias so nothing else breaks
+    def _sync_repeat_checkbox(self, index: int):
+        self._sync_field_checkboxes(index)
 
     def _on_repeat_toggled(self, state: int):
         index = self._field_list.currentRow()
         if index < 0:
             return
         self._canvas.set_box_repeat(index, bool(state))
+        # turning on repeat disables sub_group (mutually exclusive)
+        if state:
+            self._subgroup_check.blockSignals(True)
+            self._subgroup_check.setChecked(False)
+            self._subgroup_check.blockSignals(False)
+        self._refresh_field_list()
+
+    def _on_subgroup_toggled(self, state: int):
+        index = self._field_list.currentRow()
+        if index < 0:
+            return
+        self._canvas.set_box_sub_group(index, bool(state))
+        # turning on sub_group disables repeat (mutually exclusive)
+        if state:
+            self._repeat_check.blockSignals(True)
+            self._repeat_check.setChecked(False)
+            self._repeat_check.blockSignals(False)
         self._refresh_field_list()
 
     def _refresh_field_list(self):
@@ -267,7 +302,12 @@ class TemplateBuilderWidget(QWidget):
         self._field_list.clear()
         for f in self._canvas.get_field_defs():
             bbox = f["bbox"]
-            prefix = "↺ " if f.get("repeat") else "   "
+            if f.get("sub_group"):
+                prefix = "⊞ "
+            elif f.get("repeat"):
+                prefix = "↺ "
+            else:
+                prefix = "   "
             text = f"{prefix}{f['name']}  [{bbox[0]:.0f},{bbox[1]:.0f}  →  {bbox[2]:.0f},{bbox[3]:.0f}]"
             self._field_list.addItem(QListWidgetItem(text))
         self._field_list.blockSignals(False)
@@ -287,7 +327,11 @@ class TemplateBuilderWidget(QWidget):
     def _load_selected_template(self):
         slug = self._tpl_combo.currentData()
         if not slug:
-            self._canvas.clear_boxes()
+            self._current_tpl = None
+            self._canvas.clear_image()
+            self._source_img = None
+            self._source_path = ""
+            self._source_filename = ""
             self._refresh_field_list()
             return
         tpl = load_template(slug)
@@ -343,10 +387,19 @@ class TemplateBuilderWidget(QWidget):
             self._field_list.addItem(QListWidgetItem(text))
 
     def _new_template(self):
+        self._tpl_combo.blockSignals(True)
         self._tpl_combo.setCurrentIndex(0)
+        self._tpl_combo.blockSignals(False)
         self._name_edit.clear()
-        self._canvas.clear_boxes()
+        self._current_tpl = None
+        self._source_img = None
+        self._source_path = ""
+        self._source_filename = ""
+        self._canvas.clear_image()
         self._refresh_field_list()
+        for cb in (self._repeat_check, self._subgroup_check):
+            cb.setChecked(False)
+            cb.setEnabled(False)
 
     def _delete_template(self):
         slug = self._tpl_combo.currentData()
@@ -408,16 +461,17 @@ class TemplateBuilderWidget(QWidget):
 # ── Field name dialog ─────────────────────────────────────────────────────────
 
 class _FieldNameDialog(QWidget):
-    """Minimal modal to choose or type a field name after drawing a box."""
+    """Modal to choose a field name and set its repeat / sub_group flags."""
 
     def __init__(self, presets: list[str], parent=None):
         super().__init__(parent)
         from PyQt6.QtWidgets import QDialog, QDialogButtonBox
         self._dialog = QDialog(parent)
         self._dialog.setWindowTitle("Label this field")
-        self._dialog.setMinimumWidth(300)
+        self._dialog.setMinimumWidth(340)
 
         layout = QVBoxLayout(self._dialog)
+        layout.setSpacing(10)
         layout.addWidget(QLabel("Choose a preset or type a custom name:"))
 
         self._combo = QComboBox()
@@ -425,6 +479,23 @@ class _FieldNameDialog(QWidget):
         self._combo.setEditable(True)
         self._combo.setCurrentText(presets[0])
         layout.addWidget(self._combo)
+
+        self._repeat_chk = QCheckBox("Repeat on every row")
+        self._repeat_chk.setToolTip(
+            "Value appears once (e.g. bank name) but should stamp onto every row."
+        )
+        layout.addWidget(self._repeat_chk)
+
+        self._subgroup_chk = QCheckBox("Sub-group field")
+        self._subgroup_chk.setToolTip(
+            "Value appears once per group of rows (e.g. date or balance in RBS statements).\n"
+            "Carried forward to blank rows; balance check sums the whole group."
+        )
+        layout.addWidget(self._subgroup_chk)
+
+        # mutually exclusive
+        self._repeat_chk.toggled.connect(lambda on: self._subgroup_chk.setEnabled(not on))
+        self._subgroup_chk.toggled.connect(lambda on: self._repeat_chk.setEnabled(not on))
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
@@ -434,7 +505,13 @@ class _FieldNameDialog(QWidget):
         layout.addWidget(buttons)
 
     def exec(self) -> bool:
-        return self._dialog.exec() == 1   # QDialog.DialogCode.Accepted == 1
+        return self._dialog.exec() == 1
 
     def chosen_name(self) -> str:
         return self._combo.currentText().strip()
+
+    def repeat(self) -> bool:
+        return self._repeat_chk.isChecked()
+
+    def sub_group(self) -> bool:
+        return self._subgroup_chk.isChecked()

@@ -62,6 +62,7 @@ def init_db():
             "ALTER TABLE transactions ADD COLUMN raw_data TEXT",
             "ALTER TABLE transactions ADD COLUMN batch_name TEXT",
             "ALTER TABLE transactions ADD COLUMN file_row INTEGER",
+            "ALTER TABLE transactions ADD COLUMN note TEXT",
         ]:
             try:
                 con.execute(col_def)
@@ -141,6 +142,38 @@ def log_import(filename: str, template_name: str, pages: int = 0,
         )
 
 
+def update_transaction_field(row_id: int, field_name: str, new_value: str,
+                             note: str = "") -> bool:
+    """
+    Overwrite a single field value for a transaction row.
+    Updates raw_data JSON and any matching fixed column.
+    Caller supplies the note; if omitted and field != 'note', a generic note is set.
+    """
+    init_db()
+    with _conn() as con:
+        row = con.execute("SELECT raw_data FROM transactions WHERE id = ?",
+                          (row_id,)).fetchone()
+        if not row:
+            return False
+        raw = json.loads(row["raw_data"] or "{}")
+        raw[field_name] = new_value
+
+        set_clauses = ["raw_data = ?"]
+        params: list = [json.dumps(raw)]
+
+        if field_name in _FIXED_COLS:
+            set_clauses.append(f"{field_name} = ?")
+            params.append(new_value)
+
+        if field_name != "note":
+            set_clauses.append("note = ?")
+            params.append(note or f"[{field_name}] overridden")
+
+        params.append(row_id)
+        con.execute(f"UPDATE transactions SET {', '.join(set_clauses)} WHERE id = ?", params)
+    return True
+
+
 def query_transactions(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
@@ -193,12 +226,14 @@ def query_transactions(
 
         df = df.drop(columns=["raw_data"])
 
-    # Column order: metadata first, then template fields, hide internal id
+    # Column order: id first (hidden in UI), then metadata, template fields, note last
     meta = ["batch_name", "source_file", "file_row", "template_name", "imported_at"]
     fixed = [c for c in _FIXED_COLS if c in df.columns]
     template_extra = [c for c in df.columns
-                      if c not in meta and c not in fixed and c not in ("id",)]
-    ordered = [c for c in meta + fixed + template_extra if c in df.columns]
+                      if c not in meta and c not in fixed and c not in ("id", "note")]
+    ordered = ["id"] + [c for c in meta + fixed + template_extra if c in df.columns]
+    if "note" in df.columns:
+        ordered.append("note")
     return df[ordered]
 
 

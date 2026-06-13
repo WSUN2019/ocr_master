@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd
 from PyQt6.QtCore import Qt, QAbstractTableModel, QModelIndex, pyqtSignal, QSortFilterProxyModel
-from PyQt6.QtGui import QFont, QColor
+from PyQt6.QtGui import QFont, QColor, QBrush
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QComboBox, QTableView, QGroupBox, QLineEdit,
@@ -17,37 +17,251 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import QDate
 
-from core.storage import query_transactions, query_import_log, delete_by_source, delete_by_batch, df_to_csv_bytes, init_db
+from core.storage import query_transactions, query_import_log, delete_by_source, delete_by_batch, df_to_csv_bytes, init_db, update_transaction_field
 from core.template import template_names
 
 OUTPUT_DIR  = Path(__file__).parent.parent / "output"
 CONFIG_PATH = Path(__file__).parent.parent / "config.json"
 
 
+def _to_num(v) -> float | None:
+    """Parse a value like '$1,234.56' or 78.22 into a float, or None if blank."""
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return None
+    s = str(v).replace("$", "").replace(",", "").strip()
+    if not s or s.lower() == "none":
+        return None
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def _add_balance_check(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Insert a 'balance_check' column next to the balance column.
+    For each consecutive pair of rows within the same batch/file,
+    verifies the running balance is consistent.
+    Sign convention (credit-adds vs debit-adds) is auto-detected per batch
+    using the first row pair that has enough data to distinguish.
+    """
+    cols = {c.lower(): c for c in df.columns}
+    bal_col  = cols.get("balance")
+    deb_col  = next((cols[k] for k in cols if "debit"  in k), None)
+    cred_col = next((cols[k] for k in cols if "credit" in k), None)
+
+    if not bal_col or (not deb_col and not cred_col):
+        return df
+
+    df = df.copy()
+    check = pd.Series("", index=df.index)
+
+    grp_cols = [c for c in ("batch_name", "source_file") if c in df.columns]
+    groups = df.groupby(grp_cols, sort=False) if grp_cols else [("all", df)]
+
+    for _, grp in groups:
+        bal_rows = [i for i in grp.index if _to_num(df.at[i, bal_col]) is not None]
+
+        # Detect sign convention: credit-adds (standard) vs debit-adds (bank-ledger)
+        # Test on the first row pair where a non-zero debit or credit is present
+        credit_adds = True  # default: credit increases balance
+        for i in range(1, len(bal_rows)):
+            idx      = bal_rows[i]
+            prev_idx = bal_rows[i - 1]
+            prev_bal = _to_num(df.at[prev_idx, bal_col])
+            curr_bal = _to_num(df.at[idx,      bal_col])
+            debit    = _to_num(df.at[idx, deb_col])  if deb_col  else None
+            credit   = _to_num(df.at[idx, cred_col]) if cred_col else None
+            if prev_bal is None or curr_bal is None:
+                continue
+            amt = (debit or 0.0) + (credit or 0.0)
+            if amt == 0:
+                continue  # can't distinguish with a zero-amount row
+            exp_standard = prev_bal + (credit or 0.0) - (debit or 0.0)
+            exp_inverted = prev_bal + (debit or 0.0) - (credit or 0.0)
+            if abs(exp_standard - curr_bal) < abs(exp_inverted - curr_bal):
+                credit_adds = True
+            else:
+                credit_adds = False
+            break  # convention set from first usable pair
+
+        # Detect if balance is sparse (sub-grouped): many rows have no balance.
+        # In that case, group rows by the balance-anchor rows and sum across the group.
+        total_rows = len(grp)
+        sparse_balance = total_rows > 1 and len(bal_rows) < total_rows * 0.6
+
+        all_grp_idx = list(grp.index)
+
+        for i, idx in enumerate(bal_rows):
+            if i == 0:
+                continue
+            prev_idx = bal_rows[i - 1]
+            prev_bal = _to_num(df.at[prev_idx, bal_col])
+            curr_bal = _to_num(df.at[idx,      bal_col])
+
+            if prev_bal is None or curr_bal is None:
+                continue
+
+            if sparse_balance:
+                # Sum all debits/credits between prev_bal_row (exclusive) and curr (inclusive)
+                start = all_grp_idx.index(prev_idx) + 1
+                end   = all_grp_idx.index(idx) + 1
+                group_slice = all_grp_idx[start:end]
+                total_debit  = sum(_to_num(df.at[r, deb_col])  or 0.0 for r in group_slice) if deb_col  else 0.0
+                total_credit = sum(_to_num(df.at[r, cred_col]) or 0.0 for r in group_slice) if cred_col else 0.0
+            else:
+                total_debit  = _to_num(df.at[idx, deb_col])  or 0.0 if deb_col  else 0.0
+                total_credit = _to_num(df.at[idx, cred_col]) or 0.0 if cred_col else 0.0
+
+            if credit_adds:
+                expected = prev_bal + total_credit - total_debit
+            else:
+                expected = prev_bal + total_debit - total_credit
+
+            if abs(expected - curr_bal) < 0.02:
+                check.at[idx] = "✓ Match"
+            else:
+                check.at[idx] = f"✗  {expected:,.2f}"
+
+    bal_pos = df.columns.get_loc(bal_col) + 1
+    df.insert(bal_pos, "balance_check", check)
+    return df
+
+
+_HIDDEN_COLS   = frozenset({"id"})
+_READONLY_COLS = frozenset({
+    "batch_name", "source_file", "file_row",
+    "template_name", "imported_at", "balance_check",
+})
+_BALANCE_TRIGGER = ("balance", "debit", "credit", "amount")
+
+
 class PandasModel(QAbstractTableModel):
+    _GREEN = QColor("#10b981")
+    _RED   = QColor("#ef4444")
+    _NOTE_BG = QColor(59, 130, 246, 35)   # faint blue tint for overridden rows
+
+    edit_requested = pyqtSignal(int, str, str, str)  # row_id, col_name, new_value, note
+
     def __init__(self, df: pd.DataFrame):
         super().__init__()
-        self._df = df.copy()
+        self._df   = df.copy()
+        self._cols = [c for c in df.columns if c not in _HIDDEN_COLS]
+        self._check_col = (
+            self._cols.index("balance_check")
+            if "balance_check" in self._cols else -1
+        )
 
     def rowCount(self, parent=QModelIndex()): return len(self._df)
-    def columnCount(self, parent=QModelIndex()): return len(self._df.columns)
+    def columnCount(self, parent=QModelIndex()): return len(self._cols)
+
+    def _col(self, vis: int) -> str:
+        return self._cols[vis]
 
     def data(self, index, role=Qt.ItemDataRole.DisplayRole):
-        if not index.isValid(): return None
-        val = self._df.iloc[index.row(), index.column()]
-        if role == Qt.ItemDataRole.DisplayRole:
+        if not index.isValid():
+            return None
+        col = self._col(index.column())
+        val = self._df[col].iloc[index.row()]
+
+        if role in (Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole):
             return "" if pd.isna(val) else str(val)
-        if role == Qt.ItemDataRole.BackgroundRole and index.row() % 2:
-            return QColor(26, 37, 64)
+
+        # balance_check colours
+        if index.column() == self._check_col and self._check_col >= 0:
+            text = "" if pd.isna(val) else str(val)
+            if role == Qt.ItemDataRole.ForegroundRole:
+                if text.startswith("✓"): return self._GREEN
+                if text.startswith("✗"): return self._RED
+            if role == Qt.ItemDataRole.BackgroundRole:
+                if text.startswith("✓"): return QColor(16, 185, 129, 30)
+                if text.startswith("✗"): return QColor(239, 68,  68,  30)
+            return None
+
+        if role == Qt.ItemDataRole.BackgroundRole:
+            # Blue tint on rows that have a note (manual override)
+            if "note" in self._df.columns:
+                note = self._df["note"].iloc[index.row()]
+                if pd.notna(note) and str(note).strip():
+                    return self._NOTE_BG
+            if index.row() % 2:
+                return QColor(26, 37, 64)
+
         return None
 
     def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
         if role != Qt.ItemDataRole.DisplayRole: return None
         if orientation == Qt.Orientation.Horizontal:
-            return str(self._df.columns[section])
+            return self._col(section)
         return str(section + 1)
 
-    def get_df(self): return self._df
+    def flags(self, index):
+        base = super().flags(index)
+        if self._col(index.column()) in _READONLY_COLS:
+            return base
+        return base | Qt.ItemFlag.ItemIsEditable
+
+    def setData(self, index, value, role=Qt.ItemDataRole.EditRole):
+        if role != Qt.ItemDataRole.EditRole:
+            return False
+        col = self._col(index.column())
+        if col in _READONLY_COLS:
+            return False
+        new_val = str(value).strip()
+        row = index.row()
+        df_idx = self._df.index[row]
+
+        old_raw = self._df.at[df_idx, col]
+        old_val = "" if pd.isna(old_raw) else str(old_raw).strip()
+        if old_val == new_val:
+            return False
+
+        # Cast to object dtype first to silence pandas mixed-type warning
+        if self._df[col].dtype != object:
+            self._df[col] = self._df[col].astype(object)
+        self._df.at[df_idx, col] = new_val
+        self.dataChanged.emit(index, index, [role])
+
+        # Auto-stamp note for non-note edits
+        if col != "note" and "note" in self._df.columns:
+            note = f"Manual override: [{col}] {old_val!r} → {new_val!r}"
+            self._df.at[df_idx, "note"] = note
+            if "note" in self._cols:
+                note_vis = self._cols.index("note")
+                self.dataChanged.emit(
+                    self.index(row, note_vis), self.index(row, note_vis),
+                    [Qt.ItemDataRole.DisplayRole]
+                )
+
+        if "id" in self._df.columns:
+            row_id = self._df["id"].iloc[row]
+            if pd.notna(row_id):
+                note = self._df["note"].iloc[row] if "note" in self._df.columns else ""
+                self.edit_requested.emit(int(row_id), col, new_val, note)
+
+        if any(k in col.lower() for k in _BALANCE_TRIGGER):
+            self._recompute_balance_check()
+
+        return True
+
+    def _recompute_balance_check(self):
+        base = self._df.drop(columns=["balance_check"], errors="ignore")
+        new_df = _add_balance_check(base)
+        if "balance_check" not in new_df.columns:
+            return
+        self._df["balance_check"] = new_df["balance_check"].values
+        if "balance_check" in self._cols:
+            c = self._cols.index("balance_check")
+            self.dataChanged.emit(
+                self.index(0, c),
+                self.index(len(self._df) - 1, c),
+                [Qt.ItemDataRole.DisplayRole,
+                 Qt.ItemDataRole.ForegroundRole,
+                 Qt.ItemDataRole.BackgroundRole],
+            )
+
+    def get_df(self):
+        return self._df
 
 
 class HistoryWidget(QWidget):
@@ -254,10 +468,10 @@ class HistoryWidget(QWidget):
     def _run_query_all(self):
         """Load all rows with no date filter."""
         tpl = self._tpl_filter.currentData()
-        self._df = query_transactions(
+        self._df = _add_balance_check(query_transactions(
             template_name=tpl,
             limit=self._limit_spin.value(),
-        )
+        ))
         self._after_query()
 
     def _on_date_filter_toggled(self, state: int):
@@ -268,12 +482,12 @@ class HistoryWidget(QWidget):
     def _run_query(self):
         tpl = self._tpl_filter.currentData()
         use_dates = self._date_check.isChecked()
-        self._df = query_transactions(
+        self._df = _add_balance_check(query_transactions(
             date_from=self._date_from.date().toString("yyyy-MM-dd") if use_dates else None,
             date_to=self._date_to.date().toString("yyyy-MM-dd") if use_dates else None,
             template_name=tpl,
             limit=self._limit_spin.value(),
-        )
+        ))
         self._after_query()
 
     def _after_query(self):
@@ -298,7 +512,12 @@ class HistoryWidget(QWidget):
         self.status_message.emit(f"Loaded {len(self._df)} transactions")
 
     def _load_table(self, df: pd.DataFrame):
+        sort_by = [c for c in ("template_name", "source_file", "batch_name", "file_row")
+                   if c in df.columns]
+        if sort_by:
+            df = df.sort_values(sort_by, na_position="last").reset_index(drop=True)
         model = PandasModel(df)
+        model.edit_requested.connect(self._on_cell_edited)
         proxy = QSortFilterProxyModel()
         proxy.setSourceModel(model)
         proxy.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
@@ -313,6 +532,10 @@ class HistoryWidget(QWidget):
         hdr.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         hdr.blockSignals(False)
         self._restore_column_order()
+
+    def _on_cell_edited(self, row_id: int, col_name: str, new_value: str, note: str):
+        update_transaction_field(row_id, col_name, new_value, note=note)
+        self.status_message.emit(f"Row {row_id} — {note or col_name + ' updated'}")
 
     def _apply_search_filter(self, text: str):
         if self._df is None:
