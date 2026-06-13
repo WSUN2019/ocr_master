@@ -185,7 +185,7 @@ class PandasModel(QAbstractTableModel):
                 if pd.notna(note) and str(note).strip():
                     return self._NOTE_BG
             if index.row() % 2:
-                return QColor(26, 37, 64)
+                return QColor(248, 250, 252)  # slate-50 alternate row
 
         return None
 
@@ -366,7 +366,7 @@ class HistoryWidget(QWidget):
         # Action row
         action_row = QHBoxLayout()
         self._lbl_count = QLabel("No data loaded")
-        self._lbl_count.setStyleSheet("color: #a0c4ff;")
+        self._lbl_count.setStyleSheet("color: #2563eb;")
         action_row.addWidget(self._lbl_count)
         action_row.addStretch()
 

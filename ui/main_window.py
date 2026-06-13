@@ -2,7 +2,7 @@
 Main application window — sidebar navigation + stacked content pages.
 """
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QPalette, QColor
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
     QPushButton, QLabel, QStackedWidget, QStatusBar, QSizePolicy
@@ -34,6 +34,11 @@ class MainWindow(QMainWindow):
         sidebar = QWidget()
         sidebar.setObjectName("sidebar")
         sidebar.setFixedWidth(195)
+        # Force sidebar background via palette — stylesheet QWidget rule can't override this
+        _sb_pal = sidebar.palette()
+        _sb_pal.setColor(QPalette.ColorRole.Window, QColor("#1e3a5f"))
+        sidebar.setAutoFillBackground(True)
+        sidebar.setPalette(_sb_pal)
         sb_layout = QVBoxLayout(sidebar)
         sb_layout.setContentsMargins(8, 0, 8, 16)
         sb_layout.setSpacing(4)
@@ -45,7 +50,7 @@ class MainWindow(QMainWindow):
 
         subtitle = QLabel("Bank Statement Extractor")
         subtitle.setStyleSheet(
-            "color: #253449; font-size: 10px; padding-left: 20px; padding-bottom: 16px;"
+            "color: #93c5fd; font-size: 10px; padding-left: 20px; padding-bottom: 16px;"
         )
         subtitle.setWordWrap(True)
         sb_layout.addWidget(subtitle)

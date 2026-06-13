@@ -18,16 +18,16 @@ class _FlowDiagram(QWidget):
     _GAP      = 40
 
     _C = {
-        "bg":      QColor(15, 23, 42),
-        "box_bg":  QColor(22, 33, 55),
-        "blue":    QColor(59, 130, 246),
-        "amber":   QColor(245, 158, 11),
-        "green":   QColor(16, 185, 129),
-        "teal":    QColor(6, 182, 212),
-        "slate":   QColor(71, 85, 105),
-        "text":    QColor(226, 232, 240),
-        "muted":   QColor(148, 163, 184),
-        "arrow":   QColor(100, 116, 139),
+        "bg":      QColor(241, 245, 249),   # slate-100
+        "box_bg":  QColor(255, 255, 255),   # white
+        "blue":    QColor(37, 99, 235),     # blue-600
+        "amber":   QColor(217, 119, 6),     # amber-600
+        "green":   QColor(5, 150, 105),     # emerald-600
+        "teal":    QColor(13, 148, 136),    # teal-600
+        "slate":   QColor(100, 116, 139),   # slate-500
+        "text":    QColor(30, 41, 59),      # slate-800
+        "muted":   QColor(100, 116, 139),   # slate-500
+        "arrow":   QColor(148, 163, 184),   # slate-400
     }
 
     # (icon, label, sublabel, accent-key)
@@ -186,12 +186,12 @@ def _section(title: str, items: list[tuple[str, str]]) -> QGroupBox:
         lbl_step = QLabel(step)
         lbl_step.setFixedWidth(26)
         lbl_step.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignHCenter)
-        lbl_step.setStyleSheet("color: #60a5fa; font-weight: bold; font-size: 13px;")
+        lbl_step.setStyleSheet("color: #2563eb; font-weight: bold; font-size: 13px;")
         row.addWidget(lbl_step)
 
         lbl_desc = QLabel(desc)
         lbl_desc.setWordWrap(True)
-        lbl_desc.setStyleSheet("color: #cbd5e1; font-size: 12px;")
+        lbl_desc.setStyleSheet("color: #334155; font-size: 12px;")
         lbl_desc.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         row.addWidget(lbl_desc)
 

@@ -56,7 +56,7 @@ class BatchWidget(QWidget):
             "batch name; each file is moved to the complete folder after saving."
         )
         sub.setWordWrap(True)
-        sub.setStyleSheet("color: #94a3b8; font-size: 12px; padding-bottom: 4px;")
+        sub.setStyleSheet("color: #64748b; font-size: 12px; padding-bottom: 4px;")
         root.addWidget(sub)
 
         # ── Config ────────────────────────────────────────────────────────────
@@ -114,7 +114,7 @@ class BatchWidget(QWidget):
         # ── Run controls ──────────────────────────────────────────────────────
         run_row = QHBoxLayout()
         self._lbl_found = QLabel("No files scanned yet")
-        self._lbl_found.setStyleSheet("color: #a0c4ff;")
+        self._lbl_found.setStyleSheet("color: #2563eb;")
         run_row.addWidget(self._lbl_found)
         run_row.addStretch()
 
@@ -156,7 +156,7 @@ class BatchWidget(QWidget):
         self._log.setReadOnly(True)
         self._log.setFont(QFont("Courier New", 10))
         self._log.setStyleSheet(
-            "background: #080c14; color: #cbd5e1; border: none;"
+            "background: #f8fafc; color: #1e293b; border: 1px solid #e2e8f0;"
         )
         right_lay.addWidget(self._log)
         splitter.addWidget(right)
