@@ -10,7 +10,8 @@ from typing import Optional
 
 import pandas as pd
 
-DB_PATH = Path(__file__).parent.parent / "ocr_master.db"
+from core.app_paths import APP_DIR
+DB_PATH = APP_DIR / "ocr_master.db"
 
 # Fixed columns that exist as real DB columns (for indexing / filtering)
 _FIXED_COLS = {

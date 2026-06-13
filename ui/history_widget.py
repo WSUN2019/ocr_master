@@ -20,8 +20,9 @@ from PyQt6.QtCore import QDate
 from core.storage import query_transactions, query_import_log, delete_by_source, delete_by_batch, df_to_csv_bytes, init_db, update_transaction_field
 from core.template import template_names
 
-OUTPUT_DIR  = Path(__file__).parent.parent / "output"
-CONFIG_PATH = Path(__file__).parent.parent / "config.json"
+from core.app_paths import APP_DIR
+OUTPUT_DIR  = APP_DIR / "output"
+CONFIG_PATH = APP_DIR / "config.json"
 
 
 def _to_num(v) -> float | None:

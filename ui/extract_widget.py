@@ -22,7 +22,7 @@ from core.extractor import tesseract_available
 from ui.ocr_worker import OcrWorker
 from ui.history_widget import _add_balance_check
 
-APP_DIR    = Path(__file__).parent.parent
+from core.app_paths import APP_DIR
 INPUT_DIR  = APP_DIR / "input_files"
 OUTPUT_DIR = APP_DIR / "output"
 

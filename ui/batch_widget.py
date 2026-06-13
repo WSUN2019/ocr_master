@@ -19,7 +19,7 @@ from core.template import list_templates, load_template
 from core.storage import init_db
 from ui.batch_worker import BatchWorker
 
-APP_DIR      = Path(__file__).parent.parent
+from core.app_paths import APP_DIR
 IMPORT_DIR   = APP_DIR / "batch_import"
 COMPLETE_DIR = APP_DIR / "batch_complete"
 

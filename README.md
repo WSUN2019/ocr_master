@@ -39,16 +39,45 @@ brew install tesseract
 # https://github.com/UB-Mannheim/tesseract/wiki
 ```
 
-## Run
+## Run (development)
 
 ```bash
 ./run.sh
-```
-
-Or directly:
-```bash
+# or
 python3 app.py
 ```
+
+## Windows — Build a distributable installer
+
+To give customers a double-click installer (`OCRMasterSetup.exe`):
+
+### Prerequisites (one-time, on a Windows machine)
+1. **Python 3.11+** — [python.org](https://www.python.org/downloads/) (check "Add to PATH")
+2. **Tesseract OCR** — [UB-Mannheim installer](https://github.com/UB-Mannheim/tesseract/wiki) — install the `tesseract-ocr-w64-setup-*.exe`; add to PATH when prompted
+3. **Inno Setup** — [jrsoftware.org](https://jrsoftware.org/isinfo.php) (free, for creating the installer)
+
+### Build steps
+```bat
+REM 1. Clone the repo and open a terminal in the repo folder
+REM 2. Run the build script — installs deps, runs PyInstaller
+build\build_windows.bat
+
+REM 3. Test the raw exe
+dist\OCRMaster\OCRMaster.exe
+
+REM 4. Build the installer
+REM    Open build\installer.iss in Inno Setup Compiler → press F9
+REM    Output: build\Output\OCRMasterSetup.exe
+```
+
+The installer:
+- Copies the app to `Program Files\OCRMaster`
+- Creates Start Menu and optional Desktop shortcuts
+- Detects if Tesseract is missing and offers to open the download page
+- Includes an uninstaller
+
+> **Note:** user data (`templates/`, `ocr_master.db`, `batch_import/`, etc.) lives
+> next to `OCRMaster.exe` inside `Program Files\OCRMaster` and is **not** removed on uninstall.
 
 ## Workflow
 

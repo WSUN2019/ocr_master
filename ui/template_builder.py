@@ -196,7 +196,8 @@ class TemplateBuilderWidget(QWidget):
 
     def _open_file(self, path: str = ""):
         if not path:
-            start_dir = Path(__file__).parent.parent / "input_files"
+            from core.app_paths import APP_DIR
+            start_dir = APP_DIR / "input_files"
             start_dir.mkdir(exist_ok=True)
             path, _ = QFileDialog.getOpenFileName(
                 self, "Open Statement Image",

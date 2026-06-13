@@ -8,7 +8,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
+from core.app_paths import APP_DIR
+TEMPLATES_DIR = APP_DIR / "templates"
 
 
 def _ensure_dir():
