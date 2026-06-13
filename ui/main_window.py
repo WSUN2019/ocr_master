@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
 
 from ui.template_builder import TemplateBuilderWidget
 from ui.extract_widget import ExtractWidget
+from ui.batch_widget import BatchWidget
 from ui.history_widget import HistoryWidget
 from ui.settings_widget import SettingsWidget
 from ui.help_widget import HelpWidget
@@ -53,6 +54,7 @@ class MainWindow(QMainWindow):
         nav_items = [
             ("  \U0001f5fa  Template Builder", "Map fields on a sample image"),
             ("  \U0001f4c4  Extract",           "Run OCR on statements"),
+            ("  \U0001f4e6  Batch",             "Process a folder of files"),
             ("  \U0001f4ca  History",           "Browse extracted data"),
             ("  ⚙️  Settings",        "Templates & database"),
             ("  ❓  How to Use",      "Workflow guide & diagram"),
@@ -77,14 +79,15 @@ class MainWindow(QMainWindow):
 
         self._template_builder = TemplateBuilderWidget()
         self._extract_widget   = ExtractWidget()
+        self._batch_widget     = BatchWidget()
         self._history_widget   = HistoryWidget()
         self._settings_widget  = SettingsWidget()
         self._help_widget      = HelpWidget()
         self._about_widget     = AboutWidget()
 
         for w in [self._template_builder, self._extract_widget,
-                  self._history_widget, self._settings_widget,
-                  self._help_widget, self._about_widget]:
+                  self._batch_widget, self._history_widget,
+                  self._settings_widget, self._help_widget, self._about_widget]:
             self._stack.addWidget(w)
 
         root_layout.addWidget(self._stack)
@@ -101,7 +104,7 @@ class MainWindow(QMainWindow):
         self._navigate(0)
 
         for w in [self._template_builder, self._extract_widget,
-                  self._history_widget, self._settings_widget]:
+                  self._batch_widget, self._history_widget, self._settings_widget]:
             if hasattr(w, "status_message"):
                 w.status_message.connect(self.status.showMessage)
 
