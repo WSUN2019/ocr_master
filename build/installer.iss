@@ -49,6 +49,8 @@ Name: "{userappdata}\{#UserDataName}\templates"
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; SaiminBank example template — copy to user AppData templates folder (skip if user already has it)
+Source: "..\templates\saiminbank.json"; DestDir: "{userappdata}\{#UserDataName}\templates"; Flags: ignoreversion onlyifdoesntexist
 
 [Icons]
 Name: "{group}\{#AppName}";           Filename: "{app}\{#AppExeName}"
@@ -64,6 +66,45 @@ var
   TessPage:    TInputOptionWizardPage;
   DataDirPage: TInputDirWizardPage;
   TessAlreadyInstalled: Boolean;
+
+// ── Existing install detection ────────────────────────────────────────────────
+
+function InitializeSetup(): Boolean;
+var
+  UninstStr: String;
+  ResultCode: Integer;
+  Choice: Integer;
+begin
+  Result := True;
+
+  // Check for existing installation via Inno Setup registry key
+  if RegQueryStringValue(HKLM,
+      'Software\Microsoft\Windows\CurrentVersion\Uninstall\{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}_is1',
+      'UninstallString', UninstStr) or
+     RegQueryStringValue(HKCU,
+      'Software\Microsoft\Windows\CurrentVersion\Uninstall\{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}_is1',
+      'UninstallString', UninstStr) then
+  begin
+    Choice := MsgBox(
+      'OCR Master is already installed on this machine.' + #13#10 + #13#10 +
+      'What would you like to do?' + #13#10 + #13#10 +
+      '  YES  — Uninstall the existing version first, then exit' + #13#10 +
+      '  NO   — Upgrade / reinstall over the existing version',
+      mbConfirmation, MB_YESNO);
+
+    if Choice = IDYES then
+    begin
+      MsgBox(
+        'The uninstaller will now run.' + #13#10 +
+        'After it finishes, re-run this installer to install a fresh copy.',
+        mbInformation, MB_OK);
+      Exec(RemoveQuotes(UninstStr), '/NORESTART', '', SW_SHOW,
+           ewWaitUntilTerminated, ResultCode);
+      Result := False; // exit setup after uninstall
+    end;
+    // IDNO: fall through and let the installer upgrade in place
+  end;
+end;
 
 // ── Dependency checks ─────────────────────────────────────────────────────────
 
@@ -222,6 +263,13 @@ begin
   ForceDirectories(DataDir + '\output');
   ForceDirectories(DataDir + '\batch_import');
   ForceDirectories(DataDir + '\batch_complete');
+
+  // ── Copy SaiminBank example image to input folder (skip if already there) ──
+  if not FileExists(DataDir + '\input_files\SaiminBank.png') then
+    FileCopy(
+      ExpandConstant('{app}') + '\_internal\input_files\Examples\SaiminBank.png',
+      DataDir + '\input_files\SaiminBank.png',
+      False);
 
   // ── Write config.json ──
   WriteFullConfig(TessExe, DataDir);

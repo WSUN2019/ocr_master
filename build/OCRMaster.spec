@@ -36,6 +36,8 @@ a = Analysis(
         (str(ROOT / 'docs'), 'docs'),
         # Ship sample statement images so first-time users can try the app
         (str(ROOT / 'input_files' / 'Examples'), 'input_files/Examples'),
+        # Ship the SaiminBank example template
+        (str(ROOT / 'templates' / 'saiminbank.json'), 'templates'),
     ],
     hiddenimports=[
         # PyQt6 platform plugin loaded at runtime
