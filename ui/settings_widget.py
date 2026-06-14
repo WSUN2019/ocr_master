@@ -111,11 +111,17 @@ class SettingsWidget(QWidget):
         btn_backup.clicked.connect(self._backup_db)
         btn_row2.addWidget(btn_backup)
 
-        btn_wipe = QPushButton("Wipe All Data…")
+        btn_wipe = QPushButton("Delete Database…")
         btn_wipe.setObjectName("btn_danger")
         btn_wipe.setToolTip("Permanently delete every transaction and import log from the database")
         btn_wipe.clicked.connect(self._wipe_db)
         btn_row2.addWidget(btn_wipe)
+
+        btn_wipe_all = QPushButton("Wipe All Data…")
+        btn_wipe_all.setObjectName("btn_danger")
+        btn_wipe_all.setToolTip("Permanently delete all transactions AND all saved templates")
+        btn_wipe_all.clicked.connect(self._wipe_all)
+        btn_row2.addWidget(btn_wipe_all)
 
         btn_row2.addStretch()
         db_layout.addLayout(btn_row2)
@@ -224,7 +230,7 @@ class SettingsWidget(QWidget):
 
     def _wipe_db(self):
         reply = QMessageBox.warning(
-            self, "Wipe Database",
+            self, "Delete Database",
             "This will permanently delete ALL transactions and import logs.\n\n"
             "This cannot be undone. Back up the database first if needed.\n\n"
             "Are you absolutely sure?",
@@ -233,18 +239,48 @@ class SettingsWidget(QWidget):
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
-        # Second confirmation — type check
         from PyQt6.QtWidgets import QInputDialog
         text, ok = QInputDialog.getText(
-            self, "Confirm Wipe", "Type  WIPE  to confirm:"
+            self, "Confirm Delete", "Type  DELETE  to confirm:"
         )
-        if not ok or text.strip().upper() != "WIPE":
-            QMessageBox.information(self, "Cancelled", "Database was not wiped.")
+        if not ok or text.strip().upper() != "DELETE":
+            QMessageBox.information(self, "Cancelled", "Database was not deleted.")
             return
         wipe_db()
         self._db_size_lbl.setText(f"Size: {db_size_mb():.3f} MB")
-        self.status_message.emit("Database wiped — all transactions deleted")
+        self.status_message.emit("Database deleted — all transactions removed")
         QMessageBox.information(self, "Done", "All transactions and import logs have been deleted.")
+
+    def _wipe_all(self):
+        reply = QMessageBox.warning(
+            self, "Wipe All Data",
+            "This will permanently delete ALL transactions, import logs AND every saved template.\n\n"
+            "This cannot be undone.\n\n"
+            "Are you absolutely sure?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        from PyQt6.QtWidgets import QInputDialog
+        text, ok = QInputDialog.getText(
+            self, "Confirm Wipe All", "Type  WIPE  to confirm:"
+        )
+        if not ok or text.strip().upper() != "WIPE":
+            QMessageBox.information(self, "Cancelled", "Nothing was deleted.")
+            return
+        wipe_db()
+        from core.template import TEMPLATES_DIR
+        for json_file in TEMPLATES_DIR.glob("*.json"):
+            try:
+                json_file.unlink()
+            except Exception:
+                pass
+        self._refresh_templates()
+        self._tpl_detail.clear()
+        self._db_size_lbl.setText(f"Size: {db_size_mb():.3f} MB")
+        self.status_message.emit("All data wiped — database and templates deleted")
+        QMessageBox.information(self, "Done", "All transactions and templates have been deleted.")
 
     def _vacuum(self):
         vacuum_db()
