@@ -25,7 +25,7 @@ ocr_master.db
 # Templates (contain layout coords derived from real statements)
 templates/
 # Allow sample/test template
-!templates/mdbank.json
+!templates/md_bank.json
 !templates/mdbank.png
 
 # User preferences
