@@ -27,11 +27,15 @@ cd ocr_master
 
 ### 2 — Run the build script
 
-```bat
-build\build_windows.bat
+Right-click `build\build_windows.ps1` in Windows Explorer → **Run with PowerShell**
+
+Or from a terminal:
+```powershell
+powershell -ExecutionPolicy Bypass -File build\build_windows.ps1
 ```
 
 This script:
+- Changes to the repo root automatically (works regardless of where it is launched from)
 - Installs all Python dependencies (`requirements.txt` + `pyinstaller`)
 - Runs PyInstaller using `build\OCRMaster.spec`
 - Outputs a self-contained folder at `dist\OCRMaster\`
@@ -86,7 +90,7 @@ Send `OCRMasterSetup.exe` to the customer. That single file is the full installe
 
 | File | Purpose |
 |------|---------|
-| `build\build_windows.bat` | One-command build: installs deps + runs PyInstaller |
+| `build\build_windows.ps1` | One-command build: installs deps + runs PyInstaller |
 | `build\OCRMaster.spec` | PyInstaller spec (entry point, hidden imports, excludes) |
 | `build\installer.iss` | Inno Setup script — produces `OCRMasterSetup.exe` |
 | `core\app_paths.py` | Path resolver — ensures data dirs work both frozen and in dev |

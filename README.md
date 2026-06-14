@@ -57,17 +57,18 @@ To give customers a double-click installer (`OCRMasterSetup.exe`):
 3. **Inno Setup** — [jrsoftware.org](https://jrsoftware.org/isinfo.php) (free, for creating the installer)
 
 ### Build steps
-```bat
-REM 1. Clone the repo and open a terminal in the repo folder
-REM 2. Run the build script — installs deps, runs PyInstaller
-build\build_windows.bat
+```powershell
+# 1. Clone the repo
+# 2. Right-click build\build_windows.ps1 → "Run with PowerShell"
+#    (or from a terminal:)
+powershell -ExecutionPolicy Bypass -File build\build_windows.ps1
 
-REM 3. Test the raw exe
+# 3. Test the raw exe
 dist\OCRMaster\OCRMaster.exe
 
-REM 4. Build the installer
-REM    Open build\installer.iss in Inno Setup Compiler → press F9
-REM    Output: build\Output\OCRMasterSetup.exe
+# 4. Build the installer
+#    Open build\installer.iss in Inno Setup Compiler → press F9
+#    Output: build\Output\OCRMasterSetup.exe
 ```
 
 The installer:
