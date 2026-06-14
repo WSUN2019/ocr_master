@@ -112,6 +112,7 @@ class TemplateBuilderWidget(QWidget):
 
         self._field_list = QListWidget()
         self._field_list.setAlternatingRowColors(True)
+        self._field_list.setMinimumHeight(168)  # ~6 rows at 28px each
         self._field_list.currentRowChanged.connect(self._on_field_row_changed)
         fg_layout.addWidget(self._field_list)
 
