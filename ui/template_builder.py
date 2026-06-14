@@ -99,9 +99,8 @@ class TemplateBuilderWidget(QWidget):
         self._canvas.box_selected.connect(self._on_canvas_box_selected)
         splitter.addWidget(self._canvas)
 
-        # Right panel
+        # Right panel — fixed width, scrollable when app is resized small
         right = QWidget()
-        right.setMaximumWidth(300)
         right_layout = QVBoxLayout(right)
         right_layout.setContentsMargins(8, 0, 0, 0)
         right_layout.setSpacing(10)
@@ -240,8 +239,17 @@ class TemplateBuilderWidget(QWidget):
         right_layout.addWidget(save_group)
 
         right_layout.addStretch()
-        splitter.addWidget(right)
-        splitter.setSizes([900, 280])
+
+        right_scroll = QScrollArea()
+        right_scroll.setWidget(right)
+        right_scroll.setWidgetResizable(True)
+        right_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        right_scroll.setFixedWidth(300)
+        right_scroll.setFrameShape(right_scroll.Shape.NoFrame)
+
+        splitter.addWidget(right_scroll)
+        splitter.setSizes([900, 300])
+        splitter.setCollapsible(1, False)
         root.addWidget(splitter)
 
     # ── File open ─────────────────────────────────────────────────────────────
