@@ -11,7 +11,7 @@ from PyQt6.QtCore import Qt, QAbstractTableModel, QModelIndex, pyqtSignal
 from PyQt6.QtGui import QFont, QColor, QBrush
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QComboBox, QTableView, QGroupBox, QLineEdit,
+    QComboBox, QTableView, QGroupBox, QLineEdit, QLayout,
     QDateEdit, QAbstractItemView, QHeaderView,
     QFileDialog, QMessageBox, QSpinBox, QCheckBox
 )
@@ -301,6 +301,7 @@ class HistoryWidget(QWidget):
         # ── Filters ───────────────────────────────────────────────────────────
         filter_group = QGroupBox("Filters")
         filter_layout = QHBoxLayout(filter_group)
+        filter_layout.setSizeConstraint(QLayout.SizeConstraint.SetMinimumSize)
 
         self._date_check = QCheckBox("Date range:")
         self._date_check.setChecked(False)
@@ -312,6 +313,7 @@ class HistoryWidget(QWidget):
         self._date_from.setDate(QDate.currentDate().addYears(-5))
         self._date_from.setDisplayFormat("yyyy-MM-dd")
         self._date_from.setEnabled(False)
+        self._date_from.setFixedWidth(120)
         filter_layout.addWidget(self._date_from)
 
         filter_layout.addWidget(QLabel("→"))
@@ -321,17 +323,18 @@ class HistoryWidget(QWidget):
         self._date_to.setDate(QDate.currentDate())
         self._date_to.setDisplayFormat("yyyy-MM-dd")
         self._date_to.setEnabled(False)
+        self._date_to.setFixedWidth(120)
         filter_layout.addWidget(self._date_to)
 
         filter_layout.addWidget(QLabel("Template:"))
         self._tpl_filter = QComboBox()
-        self._tpl_filter.setMinimumWidth(160)
+        self._tpl_filter.setFixedWidth(160)
         filter_layout.addWidget(self._tpl_filter)
 
         filter_layout.addWidget(QLabel("Search:"))
         self._search_edit = QLineEdit()
         self._search_edit.setPlaceholderText("Filter description…")
-        self._search_edit.setMinimumWidth(160)
+        self._search_edit.setFixedWidth(180)
         self._search_edit.textChanged.connect(self._apply_search_filter)
         filter_layout.addWidget(self._search_edit)
 
@@ -340,6 +343,7 @@ class HistoryWidget(QWidget):
         self._limit_spin.setRange(100, 100000)
         self._limit_spin.setValue(5000)
         self._limit_spin.setSingleStep(500)
+        self._limit_spin.setFixedWidth(80)
         filter_layout.addWidget(self._limit_spin)
 
         btn_query = QPushButton("Query")
@@ -351,6 +355,8 @@ class HistoryWidget(QWidget):
         btn_all.setToolTip("Load all rows regardless of date")
         btn_all.clicked.connect(self._run_query_all)
         filter_layout.addWidget(btn_all)
+
+        filter_layout.addStretch()
 
         root.addWidget(filter_group)
 

@@ -109,18 +109,18 @@ class SettingsWidget(QWidget):
         btn_vacuum.clicked.connect(self._vacuum)
         btn_row2.addWidget(btn_vacuum)
 
-        btn_backup = QPushButton("Backup Database…")
+        btn_backup = QPushButton("Backup Database + Templates…")
         btn_backup.setObjectName("btn_primary")
         btn_backup.clicked.connect(self._backup_db)
         btn_row2.addWidget(btn_backup)
 
-        btn_wipe = QPushButton("Delete Database…")
+        btn_wipe = QPushButton("Delete Database Only…")
         btn_wipe.setObjectName("btn_danger")
         btn_wipe.setToolTip("Permanently delete every transaction and import log from the database")
         btn_wipe.clicked.connect(self._wipe_db)
         btn_row2.addWidget(btn_wipe)
 
-        btn_wipe_all = QPushButton("Wipe All Data…")
+        btn_wipe_all = QPushButton("Delete Everything (Database + Templates)…")
         btn_wipe_all.setObjectName("btn_danger")
         btn_wipe_all.setToolTip("Permanently delete all transactions AND all saved templates")
         btn_wipe_all.clicked.connect(self._wipe_all)

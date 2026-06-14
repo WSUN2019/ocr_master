@@ -1,3 +1,6 @@
 #!/bin/bash
 cd "$(dirname "$0")"
 python3 app.py
+
+#echo ""
+#read -rp "Press Enter to close…"

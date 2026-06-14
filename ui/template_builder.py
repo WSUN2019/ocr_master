@@ -101,7 +101,6 @@ class TemplateBuilderWidget(QWidget):
 
         # Right panel — fixed width, scrollable when app is resized small
         right = QWidget()
-        right.setMaximumWidth(362)
         right_layout = QVBoxLayout(right)
         right_layout.setContentsMargins(8, 0, 0, 0)
         right_layout.setSpacing(10)
@@ -171,7 +170,7 @@ class TemplateBuilderWidget(QWidget):
         self._strategy_combo = QComboBox()
         self._strategy_combo.addItem("Fixed Regions", "fixed_regions")
         self._strategy_combo.addItem("Repeat Vertical - 1 row repeats", "repeat_vertical")
-        self._strategy_combo.setFixedWidth(300)
+        self._strategy_combo.setMinimumWidth(200)
         rd_form.addRow("Strategy:", self._strategy_combo)
 
         self._row_height = QDoubleSpinBox()
@@ -466,8 +465,13 @@ class TemplateBuilderWidget(QWidget):
         saved_name = tpl.get("sample_image_path", "")
         if saved_name:
             from core.app_paths import APP_DIR
-            candidate = APP_DIR / "input_files" / Path(saved_name).name
-            if candidate.exists() and str(candidate) != self._source_path:
+            fname = Path(saved_name).name
+            search_dirs = [
+                APP_DIR / "input_files",
+                APP_DIR / "input_files" / "Examples",
+            ]
+            candidate = next((d / fname for d in search_dirs if (d / fname).exists()), None)
+            if candidate and str(candidate) != self._source_path:
                 self._open_file(str(candidate))
             else:
                 self._apply_template_to_canvas()

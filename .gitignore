@@ -1,7 +1,7 @@
 # ── Financial data — never commit any of this ─────────────────────────────────
 input_files/*
 !input_files/.gitkeep
-!input_files/MDBank.png
+!input_files/Examples/
 output/
 
 # Database
@@ -16,10 +16,9 @@ ocr_master.db
 *.jpeg
 *.png
 !docs/*.png
-!templates/MDBank.png
-!input_files/MDBank.png
 *.tif
 *.tiff
+!input_files/Examples/*
 
 # Exported data
 *.csv
@@ -28,7 +27,6 @@ ocr_master.db
 # Templates (contain layout coords derived from real statements)
 templates/*
 !templates/.gitkeep
-!templates/md_bank.json
 
 # User preferences
 config.json
@@ -63,6 +61,3 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
-
-# Streamlit (legacy — no longer used)
-.streamlit/
