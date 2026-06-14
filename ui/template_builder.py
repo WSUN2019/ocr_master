@@ -167,26 +167,30 @@ class TemplateBuilderWidget(QWidget):
         rd_form.setSpacing(8)
 
         self._strategy_combo = QComboBox()
-        self._strategy_combo.addItem("fixed_regions  — draw full columns (recommended)", "fixed_regions")
-        self._strategy_combo.addItem("repeat_vertical  — draw one row, repeat at fixed height", "repeat_vertical")
+        self._strategy_combo.addItem("Fixed Regions", "fixed_regions")
+        self._strategy_combo.addItem("Repeat Vertical - 1 row repeats", "repeat_vertical")
+        self._strategy_combo.setFixedWidth(240)
         rd_form.addRow("Strategy:", self._strategy_combo)
 
         self._row_height = QDoubleSpinBox()
         self._row_height.setRange(2.0, 500.0)
         self._row_height.setValue(12.0)
         self._row_height.setSuffix(" px")
+        self._row_height.setFixedWidth(120)
         rd_form.addRow("Row height:", self._row_height)
 
         self._start_y = QDoubleSpinBox()
         self._start_y.setRange(0.0, 99999.0)
         self._start_y.setValue(0.0)
         self._start_y.setSuffix(" px")
+        self._start_y.setFixedWidth(120)
         rd_form.addRow("Start Y:", self._start_y)
 
         self._end_y = QDoubleSpinBox()
         self._end_y.setRange(0.0, 99999.0)
         self._end_y.setValue(800.0)
         self._end_y.setSuffix(" px")
+        self._end_y.setFixedWidth(120)
         rd_form.addRow("End Y:", self._end_y)
 
         right_layout.addWidget(rd_group)
@@ -243,12 +247,11 @@ class TemplateBuilderWidget(QWidget):
         right_scroll = QScrollArea()
         right_scroll.setWidget(right)
         right_scroll.setWidgetResizable(True)
-        right_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        right_scroll.setFixedWidth(300)
+        right_scroll.setMinimumWidth(320)
         right_scroll.setFrameShape(right_scroll.Shape.NoFrame)
 
         splitter.addWidget(right_scroll)
-        splitter.setSizes([900, 300])
+        splitter.setSizes([900, 320])
         splitter.setCollapsible(1, False)
         root.addWidget(splitter)
 
