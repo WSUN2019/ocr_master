@@ -2,6 +2,10 @@
 
 A fully local, offline desktop application for extracting structured transaction data from bank statement images and PDFs. No cloud, no AI APIs, no data ever leaves your machine.
 
+## Screenshot
+
+![OCR Master — Template Builder](docs/screenshot.png)
+
 ## How It Works
 
 ![How to Use — workflow diagram](docs/how_to_use.png)
