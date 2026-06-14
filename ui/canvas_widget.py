@@ -274,6 +274,7 @@ class CanvasWidget(QGraphicsView):
         self._image_loaded = False
 
         self._scene.selectionChanged.connect(self._on_selection_changed)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
     # ── Selection sync ────────────────────────────────────────────────────────
 
@@ -435,6 +436,12 @@ class CanvasWidget(QGraphicsView):
         super().mouseReleaseEvent(event)
 
     # ── Zoom / resize ─────────────────────────────────────────────────────────
+
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
+            self.remove_selected_box()
+        else:
+            super().keyPressEvent(event)
 
     def wheelEvent(self, event):
         factor = 1.15 if event.angleDelta().y() > 0 else 1 / 1.15

@@ -88,6 +88,20 @@ class TemplateBuilderWidget(QWidget):
         tpl_row.addStretch()
         root.addLayout(tpl_row)
 
+        # ── Name + Save row (immediately below template selector) ─────────────
+        save_row = QHBoxLayout()
+        save_row.addWidget(QLabel("Template name:"))
+        self._name_edit = QLineEdit()
+        self._name_edit.setPlaceholderText("e.g. Chase Checking 2024")
+        self._name_edit.setMinimumWidth(220)
+        save_row.addWidget(self._name_edit)
+        btn_save_top = QPushButton("Save Template")
+        btn_save_top.setObjectName("btn_primary")
+        btn_save_top.clicked.connect(self._save_template)
+        save_row.addWidget(btn_save_top)
+        save_row.addStretch()
+        root.addLayout(save_row)
+
         # ── Main splitter: canvas | right panel ───────────────────────────────
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.setHandleWidth(4)
@@ -231,20 +245,6 @@ class TemplateBuilderWidget(QWidget):
 
         right_layout.addWidget(pf_group)
 
-        # Template name + save
-        save_group = QGroupBox("Save")
-        save_layout = QVBoxLayout(save_group)
-        self._name_edit = QLineEdit()
-        self._name_edit.setPlaceholderText("e.g. Chase Checking 2024")
-        save_layout.addWidget(QLabel("Template name:"))
-        save_layout.addWidget(self._name_edit)
-
-        btn_save = QPushButton("Save Template")
-        btn_save.setObjectName("btn_primary")
-        btn_save.clicked.connect(self._save_template)
-        save_layout.addWidget(btn_save)
-        right_layout.addWidget(save_group)
-
         right_layout.addStretch()
 
         right.setMaximumWidth(420)
@@ -297,18 +297,25 @@ class TemplateBuilderWidget(QWidget):
 
     def _on_box_drawn(self, rect: QRectF):
         """User finished drawing — ask for a field name and flags."""
+        existing_names = {f["name"] for f in self._canvas.get_field_defs()}
         dlg = _FieldNameDialog(PRESET_FIELDS, self)
         if dlg.exec():
             name = dlg.chosen_name()
-            if name:
-                self._canvas.add_named_box(
-                    rect, name,
-                    repeat=dlg.repeat(),
-                    sub_group=dlg.sub_group(),
-                    group_anchor=dlg.group_anchor(),
-                    concat_in_group=dlg.concat_in_group(),
-                )
-                self._refresh_field_list()
+            if not name:
+                return
+            if name in existing_names:
+                QMessageBox.warning(self, "Duplicate Field",
+                    f"A field named '{name}' already exists.\n"
+                    "Each field name must be unique.")
+                return
+            self._canvas.add_named_box(
+                rect, name,
+                repeat=dlg.repeat(),
+                sub_group=dlg.sub_group(),
+                group_anchor=dlg.group_anchor(),
+                concat_in_group=dlg.concat_in_group(),
+            )
+            self._refresh_field_list()
         # If cancelled, box is discarded (not added to canvas)
 
     def _on_box_removed(self, index: int):
