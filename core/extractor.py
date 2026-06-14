@@ -28,6 +28,31 @@ if sys.platform == "win32":
 # Single-call OCR config: treat page as sparse text with a mix of blocks
 _TSS_PAGE = "--psm 11"
 
+# Template builder renders PDFs via open_source_image at Matrix(2.0, 2.0).
+# OCR renders via _load_pages at Matrix(300/72, 300/72).
+# Bboxes must be scaled from canvas pixel space to OCR pixel space for PDFs.
+_PDF_CANVAS_SCALE = 2.0
+_PDF_OCR_SCALE    = 300 / 72
+
+
+# ── PDF coordinate scaling ────────────────────────────────────────────────────
+
+def _scale_template_for_pdf(fields: list[dict], row_detection: dict
+                             ) -> tuple[list[dict], dict]:
+    """Scale template coords from canvas (2x) pixel space to OCR (300/72) pixel space."""
+    ratio = _PDF_OCR_SCALE / _PDF_CANVAS_SCALE
+    scaled_fields = []
+    for f in fields:
+        sf = dict(f)
+        b = f["bbox"]
+        sf["bbox"] = [b[0] * ratio, b[1] * ratio, b[2] * ratio, b[3] * ratio]
+        scaled_fields.append(sf)
+    scaled_rd = dict(row_detection)
+    for key in ("start_y_pts", "end_y_pts", "row_height_pts"):
+        if key in scaled_rd:
+            scaled_rd[key] = float(scaled_rd[key]) * ratio
+    return scaled_fields, scaled_rd
+
 
 # ── Text helpers ──────────────────────────────────────────────────────────────
 
@@ -371,6 +396,11 @@ def extract_with_template(file_bytes: bytes, filename: str, template: dict) -> l
                      if any(k in f["name"].lower()
                             for k in ("amount", "balance", "withdrawal", "deposit", "total", "fee"))}
     date_fields   = {f["name"] for f in fields if "date" in f["name"].lower()}
+
+    # Template bboxes are in the 2x (144 DPI) canvas pixel space for PDFs;
+    # OCR runs at 300/72 DPI. Scale to match before filtering words.
+    if Path(filename).suffix.lower() == ".pdf":
+        fields, rd = _scale_template_for_pdf(fields, rd)
 
     pages      = _load_pages(file_bytes, filename)
     all_rows   = []

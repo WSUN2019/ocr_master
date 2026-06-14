@@ -340,6 +340,13 @@ class ExtractWidget(QWidget):
         """Reset everything for a fresh extraction session."""
         if self._worker is not None:
             self._worker.cancel()
+            try:
+                self._worker.progress.disconnect()
+                self._worker.file_done.disconnect()
+                self._worker.finished_ok.disconnect()
+                self._worker.error.disconnect()
+            except RuntimeError:
+                pass
             self._worker = None
         self._file_list.clear()
         self._table.setModel(None)
@@ -439,7 +446,7 @@ class ExtractWidget(QWidget):
     # ── Export / save ─────────────────────────────────────────────────────────
 
     def _export_csv(self):
-        if self._df is None or self._df.empty:
+        if self._model is None:
             QMessageBox.information(self, "Export", "No data to export yet.")
             return
         OUTPUT_DIR.mkdir(exist_ok=True)
@@ -447,9 +454,10 @@ class ExtractWidget(QWidget):
             self, "Save CSV", str(OUTPUT_DIR / "transactions.csv"), "CSV (*.csv)"
         )
         if path:
-            self._df.to_csv(path, index=False)
+            export_df = self._model.get_df()
+            export_df.to_csv(path, index=False)
             self.status_message.emit(f"Exported CSV: {Path(path).name}")
-            QMessageBox.information(self, "Exported", f"Saved {len(self._df)} rows to:\n{path}")
+            QMessageBox.information(self, "Exported", f"Saved {len(export_df)} rows to:\n{path}")
 
     def _save_to_db(self):
         if self._model is None:
