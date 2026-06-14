@@ -200,15 +200,51 @@ QLineEdit:read-only {
 
 QSpinBox::up-button, QDoubleSpinBox::up-button,
 QSpinBox::down-button, QDoubleSpinBox::down-button {
-    background-color: #f1f5f9;
-    border: none;
-    width: 18px;
+    background-color: #e2e8f0;
+    border: 1px solid #cbd5e1;
+    width: 22px;
     border-radius: 3px;
+    subcontrol-origin: border;
+}
+
+QSpinBox::up-button, QDoubleSpinBox::up-button {
+    subcontrol-position: top right;
+}
+
+QSpinBox::down-button, QDoubleSpinBox::down-button {
+    subcontrol-position: bottom right;
+}
+
+QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {
+    width: 8px;
+    height: 8px;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-bottom: 5px solid #475569;
+}
+
+QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {
+    width: 8px;
+    height: 8px;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 5px solid #475569;
 }
 
 QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover,
 QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {
-    background-color: #e2e8f0;
+    background-color: #2563eb;
+    border-color: #1d4ed8;
+}
+
+QSpinBox::up-button:hover QSpinBox::up-arrow,
+QDoubleSpinBox::up-button:hover QDoubleSpinBox::up-arrow {
+    border-bottom-color: #ffffff;
+}
+
+QSpinBox::down-button:hover QSpinBox::down-arrow,
+QDoubleSpinBox::down-button:hover QDoubleSpinBox::down-arrow {
+    border-top-color: #ffffff;
 }
 
 /* ── Combo boxes ────────────────────────────────────────────────────── */
