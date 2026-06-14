@@ -445,6 +445,16 @@ QProgressBar::chunk {
     border-radius: 5px;
 }
 
+/* ── Scroll area ────────────────────────────────────────────────────── */
+QScrollArea {
+    background-color: #ffffff;
+    border: none;
+}
+
+QScrollArea > QWidget > QWidget {
+    background-color: #ffffff;
+}
+
 /* ── Splitter ───────────────────────────────────────────────────────── */
 QSplitter::handle { background-color: #e2e8f0; }
 QSplitter::handle:horizontal { width: 3px; }
