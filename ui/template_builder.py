@@ -135,6 +135,25 @@ class TemplateBuilderWidget(QWidget):
         self._subgroup_check.stateChanged.connect(self._on_subgroup_toggled)
         fg_layout.addWidget(self._subgroup_check)
 
+        self._group_anchor_check = QCheckBox("Group anchor (⊕)")
+        self._group_anchor_check.setToolTip(
+            "Marks the field (e.g. date) that signals the start of a new transaction.\n"
+            "When this field has a value, all previous rows are collapsed into one row.\n"
+            "Use with 'Concat in group' on description to merge multi-line transactions."
+        )
+        self._group_anchor_check.setEnabled(False)
+        self._group_anchor_check.stateChanged.connect(self._on_group_anchor_toggled)
+        fg_layout.addWidget(self._group_anchor_check)
+
+        self._concat_check = QCheckBox("Concat in group (∑)")
+        self._concat_check.setToolTip(
+            "Concatenates this field's values across all rows in a group.\n"
+            "Use on description fields where one transaction spans several lines."
+        )
+        self._concat_check.setEnabled(False)
+        self._concat_check.stateChanged.connect(self._on_concat_toggled)
+        fg_layout.addWidget(self._concat_check)
+
         btn_row = QHBoxLayout()
         btn_rm = QPushButton("Remove Selected Box")
         btn_rm.setObjectName("btn_danger")
@@ -269,6 +288,8 @@ class TemplateBuilderWidget(QWidget):
                     rect, name,
                     repeat=dlg.repeat(),
                     sub_group=dlg.sub_group(),
+                    group_anchor=dlg.group_anchor(),
+                    concat_in_group=dlg.concat_in_group(),
                 )
                 self._refresh_field_list()
         # If cancelled, box is discarded (not added to canvas)
@@ -293,10 +314,15 @@ class TemplateBuilderWidget(QWidget):
         self._sync_field_checkboxes(row)
 
     def _sync_field_checkboxes(self, index: int):
-        """Update repeat + sub_group checkboxes from the selected box state."""
+        """Update all field-flag checkboxes from the selected box state."""
         defs = self._canvas.get_field_defs()
         has = 0 <= index < len(defs)
-        for cb, key in ((self._repeat_check, "repeat"), (self._subgroup_check, "sub_group")):
+        for cb, key in (
+            (self._repeat_check,       "repeat"),
+            (self._subgroup_check,     "sub_group"),
+            (self._group_anchor_check, "group_anchor"),
+            (self._concat_check,       "concat_in_group"),
+        ):
             cb.blockSignals(True)
             cb.setChecked(defs[index].get(key, False) if has else False)
             cb.setEnabled(has)
@@ -311,11 +337,11 @@ class TemplateBuilderWidget(QWidget):
         if index < 0:
             return
         self._canvas.set_box_repeat(index, bool(state))
-        # turning on repeat disables sub_group (mutually exclusive)
         if state:
-            self._subgroup_check.blockSignals(True)
-            self._subgroup_check.setChecked(False)
-            self._subgroup_check.blockSignals(False)
+            for cb in (self._subgroup_check, self._group_anchor_check, self._concat_check):
+                cb.blockSignals(True)
+                cb.setChecked(False)
+                cb.blockSignals(False)
         self._refresh_field_list()
 
     def _on_subgroup_toggled(self, state: int):
@@ -323,11 +349,35 @@ class TemplateBuilderWidget(QWidget):
         if index < 0:
             return
         self._canvas.set_box_sub_group(index, bool(state))
-        # turning on sub_group disables repeat (mutually exclusive)
         if state:
-            self._repeat_check.blockSignals(True)
-            self._repeat_check.setChecked(False)
-            self._repeat_check.blockSignals(False)
+            for cb in (self._repeat_check, self._group_anchor_check, self._concat_check):
+                cb.blockSignals(True)
+                cb.setChecked(False)
+                cb.blockSignals(False)
+        self._refresh_field_list()
+
+    def _on_group_anchor_toggled(self, state: int):
+        index = self._field_list.currentRow()
+        if index < 0:
+            return
+        self._canvas.set_box_group_anchor(index, bool(state))
+        if state:
+            for cb in (self._repeat_check, self._subgroup_check, self._concat_check):
+                cb.blockSignals(True)
+                cb.setChecked(False)
+                cb.blockSignals(False)
+        self._refresh_field_list()
+
+    def _on_concat_toggled(self, state: int):
+        index = self._field_list.currentRow()
+        if index < 0:
+            return
+        self._canvas.set_box_concat_in_group(index, bool(state))
+        if state:
+            for cb in (self._repeat_check, self._subgroup_check, self._group_anchor_check):
+                cb.blockSignals(True)
+                cb.setChecked(False)
+                cb.blockSignals(False)
         self._refresh_field_list()
 
     def _refresh_field_list(self):
@@ -336,7 +386,11 @@ class TemplateBuilderWidget(QWidget):
         self._field_list.clear()
         for f in self._canvas.get_field_defs():
             bbox = f["bbox"]
-            if f.get("sub_group"):
+            if f.get("group_anchor"):
+                prefix = "⊕ "
+            elif f.get("concat_in_group"):
+                prefix = "∑ "
+            elif f.get("sub_group"):
                 prefix = "⊞ "
             elif f.get("repeat"):
                 prefix = "↺ "
@@ -438,7 +492,8 @@ class TemplateBuilderWidget(QWidget):
         self._source_filename = ""
         self._canvas.clear_image()
         self._refresh_field_list()
-        for cb in (self._repeat_check, self._subgroup_check):
+        for cb in (self._repeat_check, self._subgroup_check,
+                   self._group_anchor_check, self._concat_check):
             cb.setChecked(False)
             cb.setEnabled(False)
         self._skip_pages_edit.clear()
@@ -554,9 +609,30 @@ class _FieldNameDialog(QWidget):
         )
         layout.addWidget(self._subgroup_chk)
 
-        # mutually exclusive
-        self._repeat_chk.toggled.connect(lambda on: self._subgroup_chk.setEnabled(not on))
-        self._subgroup_chk.toggled.connect(lambda on: self._repeat_chk.setEnabled(not on))
+        self._group_anchor_chk = QCheckBox("Group anchor (⊕)")
+        self._group_anchor_chk.setToolTip(
+            "Marks the field (e.g. date) that signals the start of a new transaction group.\n"
+            "When this field has a value, all previous rows collapse into one.\n"
+            "Use with 'Concat in group' on description."
+        )
+        layout.addWidget(self._group_anchor_chk)
+
+        self._concat_chk = QCheckBox("Concat in group (∑)")
+        self._concat_chk.setToolTip(
+            "Concatenates values across all rows in the group into a single field.\n"
+            "Use on description fields that span multiple lines per transaction."
+        )
+        layout.addWidget(self._concat_chk)
+
+        # all four are mutually exclusive
+        all_chks = [self._repeat_chk, self._subgroup_chk,
+                    self._group_anchor_chk, self._concat_chk]
+        for chk in all_chks:
+            others = [c for c in all_chks if c is not chk]
+            chk.toggled.connect(
+                lambda on, oth=others: [c.setEnabled(not on) for c in oth] if on else
+                                       [c.setEnabled(True) for c in oth]
+            )
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
@@ -576,3 +652,9 @@ class _FieldNameDialog(QWidget):
 
     def sub_group(self) -> bool:
         return self._subgroup_chk.isChecked()
+
+    def group_anchor(self) -> bool:
+        return self._group_anchor_chk.isChecked()
+
+    def concat_in_group(self) -> bool:
+        return self._concat_chk.isChecked()

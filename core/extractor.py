@@ -284,6 +284,77 @@ def _extract_repeat_vertical(words: list[dict], fields: list[dict],
     return rows
 
 
+# ── Row grouping (multi-line transactions) ────────────────────────────────────
+
+def _apply_row_grouping(rows: list[dict], fields: list[dict]) -> list[dict]:
+    """
+    Collapse multi-line transaction rows into one row per transaction.
+
+    anchor_fields  — field(s) marked group_anchor (e.g. date): when a row has a
+                     value here it starts a new transaction group.
+    concat_fields  — field(s) marked concat_in_group (e.g. description): values
+                     from every row in the group are joined with a space.
+    Other fields   — last non-None value in the group wins (covers debit/credit
+                     which appear only in the final row of a group).
+    """
+    anchor_fields = {f["name"] for f in fields if f.get("group_anchor", False)}
+    concat_fields = {f["name"] for f in fields if f.get("concat_in_group", False)}
+
+    if not anchor_fields:
+        return rows
+
+    groups: list[list[dict]] = []
+    current: list[dict] = []
+
+    for row in rows:
+        if row.get("_row_type") == "header":
+            if current:
+                groups.append(current)
+                current = []
+            groups.append([row])
+            continue
+
+        is_anchor = any(row.get(f) for f in anchor_fields)
+        if is_anchor and current:
+            groups.append(current)
+            current = []
+        current.append(row)
+
+    if current:
+        groups.append(current)
+
+    result = []
+    for group in groups:
+        if not group:
+            continue
+        # Single row or header — pass through unchanged
+        if len(group) == 1 or group[0].get("_row_type") == "header":
+            result.append(group[0])
+            continue
+
+        # Collect all field keys across the group
+        all_keys: set[str] = set()
+        for row in group:
+            all_keys.update(row.keys())
+        all_keys -= {"_page", "_row_type"}
+
+        collapsed: dict = {"_page": group[0]["_page"], "_row_type": "transaction"}
+        for fname in all_keys:
+            if fname in concat_fields:
+                parts = [str(row[fname]) for row in group if row.get(fname) is not None]
+                collapsed[fname] = " ".join(parts) if parts else None
+            else:
+                # Last non-None value wins (e.g. amount in the last row)
+                val = None
+                for row in group:
+                    if row.get(fname) is not None:
+                        val = row[fname]
+                collapsed[fname] = val
+        result.append(collapsed)
+
+    return result
+
+
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def extract_with_template(file_bytes: bytes, filename: str, template: dict) -> list[dict]:
@@ -319,6 +390,10 @@ def extract_with_template(file_bytes: bytes, filename: str, template: dict) -> l
         else:
             rows = _extract_fixed_regions(words, fields, amount_fields, date_fields, page_num)
         all_rows.extend(rows)
+
+    # Collapse multi-line transactions (group_anchor + concat_in_group fields)
+    if any(f.get("group_anchor") or f.get("concat_in_group") for f in fields):
+        all_rows = _apply_row_grouping(all_rows, fields)
 
     # Fill-forward for sub_group fields: value appears once per group of rows;
     # blank rows in the group inherit the last seen non-None value (date, balance, etc.)

@@ -114,10 +114,14 @@ class _ResizeHandle(QGraphicsRectItem):
             super().mouseReleaseEvent(event)
 
 
-REPEAT_PEN      = QPen(QColor(255, 200, 0),   2, Qt.PenStyle.DashLine)
-REPEAT_BRUSH    = QBrush(QColor(255, 200, 0,  40))
-SUBGROUP_PEN    = QPen(QColor(6,  182, 212),  2, Qt.PenStyle.DashDotLine)
-SUBGROUP_BRUSH  = QBrush(QColor(6, 182, 212,  35))
+REPEAT_PEN        = QPen(QColor(255, 200, 0),   2, Qt.PenStyle.DashLine)
+REPEAT_BRUSH      = QBrush(QColor(255, 200, 0,  40))
+SUBGROUP_PEN      = QPen(QColor(6,  182, 212),  2, Qt.PenStyle.DashDotLine)
+SUBGROUP_BRUSH    = QBrush(QColor(6, 182, 212,  35))
+GROUP_ANCHOR_PEN  = QPen(QColor(168, 85, 247),  2, Qt.PenStyle.DashLine)
+GROUP_ANCHOR_BRUSH= QBrush(QColor(168, 85, 247, 40))
+CONCAT_PEN        = QPen(QColor(249, 115, 22),  2, Qt.PenStyle.DotLine)
+CONCAT_BRUSH      = QBrush(QColor(249, 115, 22, 40))
 
 
 class BoxItem(QGraphicsRectItem):
@@ -130,11 +134,14 @@ class BoxItem(QGraphicsRectItem):
     """
 
     def __init__(self, rect: QRectF, field_name: str = "",
-                 repeat: bool = False, sub_group: bool = False):
+                 repeat: bool = False, sub_group: bool = False,
+                 group_anchor: bool = False, concat_in_group: bool = False):
         super().__init__(rect)
-        self.field_name = field_name
-        self.repeat    = repeat
-        self.sub_group = sub_group
+        self.field_name      = field_name
+        self.repeat          = repeat
+        self.sub_group       = sub_group
+        self.group_anchor    = group_anchor
+        self.concat_in_group = concat_in_group
         self._apply_style()
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable)
@@ -145,7 +152,13 @@ class BoxItem(QGraphicsRectItem):
         self._update_handles()
 
     def _apply_style(self):
-        if self.sub_group:
+        if self.group_anchor:
+            self.setPen(GROUP_ANCHOR_PEN)
+            self.setBrush(GROUP_ANCHOR_BRUSH)
+        elif self.concat_in_group:
+            self.setPen(CONCAT_PEN)
+            self.setBrush(CONCAT_BRUSH)
+        elif self.sub_group:
             self.setPen(SUBGROUP_PEN)
             self.setBrush(SUBGROUP_BRUSH)
         elif self.repeat:
@@ -156,7 +169,11 @@ class BoxItem(QGraphicsRectItem):
             self.setBrush(RED_BRUSH)
 
     def _update_tooltip(self):
-        if self.sub_group:
+        if self.group_anchor:
+            suffix = " [group anchor: new transaction starts here]"
+        elif self.concat_in_group:
+            suffix = " [concat: values joined across group rows]"
+        elif self.sub_group:
             suffix = " [sub-group: value shared across rows]"
         elif self.repeat:
             suffix = " [repeats every row]"
@@ -166,14 +183,32 @@ class BoxItem(QGraphicsRectItem):
 
     def set_repeat(self, value: bool):
         self.repeat = value
-        self.sub_group = False  # mutually exclusive
+        if value:
+            self.sub_group = self.group_anchor = self.concat_in_group = False
         self._apply_style()
         self._update_tooltip()
         self.update()
 
     def set_sub_group(self, value: bool):
         self.sub_group = value
-        self.repeat = False  # mutually exclusive
+        if value:
+            self.repeat = self.group_anchor = self.concat_in_group = False
+        self._apply_style()
+        self._update_tooltip()
+        self.update()
+
+    def set_group_anchor(self, value: bool):
+        self.group_anchor = value
+        if value:
+            self.repeat = self.sub_group = self.concat_in_group = False
+        self._apply_style()
+        self._update_tooltip()
+        self.update()
+
+    def set_concat_in_group(self, value: bool):
+        self.concat_in_group = value
+        if value:
+            self.repeat = self.sub_group = self.group_anchor = False
         self._apply_style()
         self._update_tooltip()
         self.update()
@@ -193,7 +228,11 @@ class BoxItem(QGraphicsRectItem):
         if self.field_name:
             painter.setPen(QPen(QColor(255, 255, 255)))
             r = self.rect()
-            if self.sub_group:
+            if self.group_anchor:
+                label = f"⊕ {self.field_name}"
+            elif self.concat_in_group:
+                label = f"∑ {self.field_name}"
+            elif self.sub_group:
                 label = f"⊞ {self.field_name}"
             elif self.repeat:
                 label = f"↺ {self.field_name}"
@@ -300,18 +339,24 @@ class CanvasWidget(QGraphicsView):
             x0, y0, x1, y1 = f["bbox"]
             self._add_box(QRectF(x0, y0, x1 - x0, y1 - y0), f["name"],
                           repeat=f.get("repeat", False),
-                          sub_group=f.get("sub_group", False))
+                          sub_group=f.get("sub_group", False),
+                          group_anchor=f.get("group_anchor", False),
+                          concat_in_group=f.get("concat_in_group", False))
 
     def _add_box(self, rect: QRectF, field_name: str,
-                 repeat: bool = False, sub_group: bool = False) -> BoxItem:
-        box = BoxItem(rect, field_name, repeat=repeat, sub_group=sub_group)
+                 repeat: bool = False, sub_group: bool = False,
+                 group_anchor: bool = False, concat_in_group: bool = False) -> BoxItem:
+        box = BoxItem(rect, field_name, repeat=repeat, sub_group=sub_group,
+                      group_anchor=group_anchor, concat_in_group=concat_in_group)
         self._scene.addItem(box)
         self._boxes.append(box)
         return box
 
     def add_named_box(self, rect: QRectF, field_name: str,
-                      repeat: bool = False, sub_group: bool = False):
-        self._add_box(rect, field_name, repeat=repeat, sub_group=sub_group)
+                      repeat: bool = False, sub_group: bool = False,
+                      group_anchor: bool = False, concat_in_group: bool = False):
+        self._add_box(rect, field_name, repeat=repeat, sub_group=sub_group,
+                      group_anchor=group_anchor, concat_in_group=concat_in_group)
 
     def set_box_repeat(self, index: int, value: bool):
         if 0 <= index < len(self._boxes):
@@ -320,6 +365,14 @@ class CanvasWidget(QGraphicsView):
     def set_box_sub_group(self, index: int, value: bool):
         if 0 <= index < len(self._boxes):
             self._boxes[index].set_sub_group(value)
+
+    def set_box_group_anchor(self, index: int, value: bool):
+        if 0 <= index < len(self._boxes):
+            self._boxes[index].set_group_anchor(value)
+
+    def set_box_concat_in_group(self, index: int, value: bool):
+        if 0 <= index < len(self._boxes):
+            self._boxes[index].set_concat_in_group(value)
 
     def remove_selected_box(self):
         for i, box in enumerate(self._boxes):
@@ -334,13 +387,15 @@ class CanvasWidget(QGraphicsView):
         for box in self._boxes:
             r = box.sceneBoundingRect()
             defs.append({
-                "name":      box.field_name,
-                "label":     box.field_name.replace("_", " ").title(),
-                "page":      0,
-                "bbox":      [round(r.x(), 2), round(r.y(), 2),
-                              round(r.x() + r.width(), 2), round(r.y() + r.height(), 2)],
-                "repeat":    box.repeat,
-                "sub_group": box.sub_group,
+                "name":           box.field_name,
+                "label":          box.field_name.replace("_", " ").title(),
+                "page":           0,
+                "bbox":           [round(r.x(), 2), round(r.y(), 2),
+                                   round(r.x() + r.width(), 2), round(r.y() + r.height(), 2)],
+                "repeat":         box.repeat,
+                "sub_group":      box.sub_group,
+                "group_anchor":   box.group_anchor,
+                "concat_in_group":box.concat_in_group,
             })
         return defs
 
