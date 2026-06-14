@@ -7,6 +7,8 @@
 #
 # Output: dist/OCRMaster/OCRMaster.exe  (folder mode — faster startup than onefile)
 
+import glob
+import os
 import sys
 from pathlib import Path
 
@@ -14,10 +16,21 @@ ROOT = Path(SPECPATH).parent   # repo root
 
 block_cipher = None
 
+# Explicitly bundle python3XX.dll and the VC++ runtime DLLs it depends on.
+# PyInstaller sometimes omits vcruntime140.dll, which causes a "specified module
+# could not be found" error on machines without Visual C++ Redist installed.
+_search_dirs = [sys.exec_prefix, os.path.join(sys.exec_prefix, 'DLLs')]
+_dll_patterns = ['python3*.dll', 'vcruntime*.dll', 'msvcp*.dll']
+_extra_binaries = []
+for _dir in _search_dirs:
+    for _pat in _dll_patterns:
+        for _dll in glob.glob(os.path.join(_dir, _pat)):
+            _extra_binaries.append((_dll, '.'))
+
 a = Analysis(
     [str(ROOT / 'app.py')],
     pathex=[str(ROOT)],
-    binaries=[],
+    binaries=_extra_binaries,
     datas=[
         # Ship the docs folder (readme images etc.) — no user data
         (str(ROOT / 'docs'), 'docs'),
@@ -75,6 +88,6 @@ coll = COLLECT(
     a.datas,
     strip=False,
     upx=True,
-    upx_exclude=[],
+    upx_exclude=['python3*.dll', 'vcruntime*.dll', 'msvcp*.dll'],
     name='OCRMaster',
 )

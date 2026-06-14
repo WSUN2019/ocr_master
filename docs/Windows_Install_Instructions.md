@@ -27,7 +27,9 @@ cd ocr_master
 
 ### 2 — Run the build script
 
-Right-click `build\build_windows.ps1` in Windows Explorer → **Run with PowerShell**
+**Easiest:** double-click `build\build_windows.bat` — it launches PowerShell automatically.
+
+Or right-click `build\build_windows.ps1` → **Run with PowerShell**
 
 Or from a terminal:
 ```powershell
@@ -90,6 +92,7 @@ Send `OCRMasterSetup.exe` to the customer. That single file is the full installe
 
 | File | Purpose |
 |------|---------|
+| `build\build_windows.bat` | Double-click launcher — calls the PS1 script automatically |
 | `build\build_windows.ps1` | One-command build: installs deps + runs PyInstaller |
 | `build\OCRMaster.spec` | PyInstaller spec (entry point, hidden imports, excludes) |
 | `build\installer.iss` | Inno Setup script — produces `OCRMasterSetup.exe` |

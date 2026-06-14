@@ -59,8 +59,9 @@ To give customers a double-click installer (`OCRMasterSetup.exe`):
 ### Build steps
 ```powershell
 # 1. Clone the repo
-# 2. Right-click build\build_windows.ps1 → "Run with PowerShell"
-#    (or from a terminal:)
+# 2. Double-click build\build_windows.bat  (easiest)
+#    Or right-click build\build_windows.ps1 → "Run with PowerShell"
+#    Or from a terminal:
 powershell -ExecutionPolicy Bypass -File build\build_windows.ps1
 
 # 3. Test the raw exe

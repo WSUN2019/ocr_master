@@ -51,7 +51,6 @@ Name: "{commondesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: desk
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(AppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
 [Code]
-// Check that Tesseract is installed before finishing setup
 function TesseractInstalled(): Boolean;
 var
   Path: String;
@@ -60,12 +59,34 @@ begin
             RegQueryStringValue(HKLM32, 'SOFTWARE\Tesseract-OCR', 'InstallDir', Path);
 end;
 
+// Visual C++ 2015-2022 x64 Redistributable (required by python3XX.dll)
+function VCRedistInstalled(): Boolean;
+var
+  Ver: String;
+begin
+  Result := RegQueryStringValue(HKLM, 'SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64', 'Version', Ver) or
+            RegQueryStringValue(HKLM, 'SOFTWARE\WOW6432Node\Microsoft\VisualStudio\14.0\VC\Runtimes\x64', 'Version', Ver);
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ErrorCode: Integer;
 begin
   if CurStep = ssDone then
   begin
+    if not VCRedistInstalled() then
+    begin
+      if MsgBox(
+        'OCR Master requires the Microsoft Visual C++ Redistributable (2022, x64).' + #13#10 + #13#10 +
+        'It is NOT currently installed on this machine.' + #13#10 + #13#10 +
+        'Without it the application will fail to start.' + #13#10 + #13#10 +
+        'Would you like to open the Microsoft download page now?',
+        mbConfirmation, MB_YESNO) = IDYES then
+      begin
+        ShellExec('open', 'https://aka.ms/vs/17/release/vc_redist.x64.exe', '', '', SW_SHOW, ewNoWait, ErrorCode);
+      end;
+    end;
+
     if not TesseractInstalled() then
     begin
       if MsgBox(
