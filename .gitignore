@@ -27,6 +27,7 @@ ocr_master.db
 # Templates (contain layout coords derived from real statements)
 templates/*
 !templates/.gitkeep
+!templates/saiminbank.json
 
 # User preferences
 config.json

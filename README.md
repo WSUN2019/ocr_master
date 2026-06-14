@@ -4,7 +4,7 @@ A fully local, offline desktop application for extracting structured transaction
 
 ## Screenshot
 
-![OCR Master — Template Builder](docs/screenshot.png)
+![OCR Master — Template Builder with SaiminBank template](docs/screenshot.png)
 
 ## How It Works
 
@@ -13,7 +13,7 @@ A fully local, offline desktop application for extracting structured transaction
 ## Features
 
 - **Visual template builder** — load a sample statement image, draw bounding boxes over each field (date, description, debit, credit, balance), label and save as a named template
-- **Multi-bank support** — create one template per bank layout; assign the right template at extract time
+- **Multi-bank support** — create one template per bank layout; assign the right template at extract time. A `SaiminBank` example template is included to get started.
 - **Repeat & Sub-group fields** — mark header fields as *Repeat* (value copied to every row) or *Sub-group* (fill-down for banks like RBS where date/balance appear once per row group)
 - **Tesseract OCR extraction** — runs once per page for performance; bounding-box crops map text to fields
 - **Single-file Extract** — add files manually, review and edit the table inline before saving to the database
