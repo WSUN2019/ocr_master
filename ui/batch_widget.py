@@ -19,9 +19,7 @@ from core.template import list_templates, load_template
 from core.storage import init_db
 from ui.batch_worker import BatchWorker
 
-from core.app_paths import APP_DIR
-IMPORT_DIR   = APP_DIR / "batch_import"
-COMPLETE_DIR = APP_DIR / "batch_complete"
+from core.config import get_config
 
 _EXTS = {".jpg", ".jpeg", ".png", ".pdf"}
 
@@ -85,7 +83,7 @@ class BatchWidget(QWidget):
         # Row 2: import folder
         row2 = QHBoxLayout()
         row2.addWidget(QLabel("Import folder:"))
-        self._import_edit = QLineEdit(str(IMPORT_DIR))
+        self._import_edit = QLineEdit(str(get_config().batch_import_dir))
         self._import_edit.setReadOnly(True)
         row2.addWidget(self._import_edit)
         btn_browse_import = QPushButton("Browse…")
@@ -101,7 +99,7 @@ class BatchWidget(QWidget):
         # Row 3: complete folder
         row3 = QHBoxLayout()
         row3.addWidget(QLabel("Complete folder:"))
-        self._complete_edit = QLineEdit(str(COMPLETE_DIR))
+        self._complete_edit = QLineEdit(str(get_config().batch_complete_dir))
         self._complete_edit.setReadOnly(True)
         row3.addWidget(self._complete_edit)
         btn_browse_complete = QPushButton("Browse…")

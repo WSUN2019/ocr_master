@@ -1,24 +1,23 @@
 """
-Settings page — manage templates, database maintenance, Tesseract path.
+Settings page — manage templates, all configurable paths, and database maintenance.
 """
 import json
+import os
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtGui import QFont
+from PyQt6.QtCore import pyqtSignal, QUrl
+from PyQt6.QtGui import QFont, QDesktopServices
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QGroupBox, QListWidget, QListWidgetItem, QTextEdit,
-    QFileDialog, QMessageBox, QLineEdit, QFormLayout
+    QFileDialog, QMessageBox, QLineEdit, QFormLayout, QScrollArea,
+    QFrame
 )
 
-from core.storage import vacuum_db, wipe_db, db_size_mb, init_db, DB_PATH
-from core.template import list_templates, load_template, delete_template, save_template, TEMPLATES_DIR
-from core.app_paths import APP_DIR
-
-CONFIG_PATH = APP_DIR / "config.json"
+from core.storage import vacuum_db, wipe_db, db_size_mb, init_db
+from core.template import list_templates, load_template, delete_template, save_template
+from core.config import get_config
 
 
 class SettingsWidget(QWidget):
@@ -27,10 +26,20 @@ class SettingsWidget(QWidget):
     def __init__(self):
         super().__init__()
         init_db()
+        self._path_edits: dict[str, QLineEdit] = {}
         self._setup_ui()
 
     def _setup_ui(self):
-        root = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+
+        # Scrollable content
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+
+        content = QWidget()
+        root = QVBoxLayout(content)
         root.setContentsMargins(16, 16, 16, 16)
         root.setSpacing(14)
 
@@ -39,7 +48,17 @@ class SettingsWidget(QWidget):
         title.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
         root.addWidget(title)
 
-        # ── Template management ───────────────────────────────────────────────
+        root.addWidget(self._build_templates_group())
+        root.addWidget(self._build_paths_group())
+        root.addWidget(self._build_database_group())
+        root.addStretch()
+
+        scroll.setWidget(content)
+        outer.addWidget(scroll)
+
+    # ── Template management ───────────────────────────────────────────────────
+
+    def _build_templates_group(self) -> QGroupBox:
         tpl_group = QGroupBox("Templates")
         tpl_layout = QHBoxLayout(tpl_group)
 
@@ -65,7 +84,6 @@ class SettingsWidget(QWidget):
         left.addLayout(btn_row)
         tpl_layout.addLayout(left, 1)
 
-        # Template detail
         right = QVBoxLayout()
         right.addWidget(QLabel("Template JSON:"))
         self._tpl_detail = QTextEdit()
@@ -74,78 +92,208 @@ class SettingsWidget(QWidget):
         right.addWidget(self._tpl_detail)
         tpl_layout.addLayout(right, 2)
 
-        root.addWidget(tpl_group)
+        return tpl_group
 
-        # ── Tesseract path (Windows) ──────────────────────────────────────────
-        ocr_group = QGroupBox("Tesseract OCR Path (Windows only)")
-        ocr_form = QFormLayout(ocr_group)
-        self._tess_path = QLineEdit()
-        self._tess_path.setPlaceholderText(r"C:\Program Files\Tesseract-OCR\tesseract.exe")
-        ocr_form.addRow("Tesseract exe:", self._tess_path)
+    # ── Paths ─────────────────────────────────────────────────────────────────
 
-        btn_tess_browse = QPushButton("Browse…")
-        btn_tess_browse.clicked.connect(self._browse_tesseract)
-        ocr_form.addRow("", btn_tess_browse)
+    def _build_paths_group(self) -> QGroupBox:
+        group = QGroupBox("Paths & Locations")
+        outer = QVBoxLayout(group)
 
-        btn_tess_test = QPushButton("Test Tesseract")
-        btn_tess_test.clicked.connect(self._test_tesseract)
-        ocr_form.addRow("", btn_tess_test)
-        root.addWidget(ocr_group)
+        note = QLabel("Changes take effect immediately. Restart the app if the database path changes.")
+        note.setStyleSheet("color: #64748b; font-size: 11px;")
+        note.setWordWrap(True)
+        outer.addWidget(note)
 
-        # ── Database ──────────────────────────────────────────────────────────
+        form = QFormLayout()
+        form.setLabelAlignment(form.labelAlignment())
+        form.setSpacing(8)
+
+        self._add_path_row(form, "Tesseract exe:",     "tesseract_path", is_file=True,  test_btn=True)
+        self._add_path_row(form, "Database file:",     "db_path",        is_file=True)
+        self._add_path_row(form, "Templates folder:",  "templates_dir",  is_file=False)
+        self._add_path_row(form, "Input files:",       "input_dir",      is_file=False)
+        self._add_path_row(form, "Output folder:",     "output_dir",     is_file=False)
+        self._add_path_row(form, "Batch import:",      "batch_import_dir",   is_file=False)
+        self._add_path_row(form, "Batch complete:",    "batch_complete_dir", is_file=False)
+
+        outer.addLayout(form)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+
+        btn_reset = QPushButton("Reset to Defaults")
+        btn_reset.clicked.connect(self._reset_paths)
+        btn_row.addWidget(btn_reset)
+
+        btn_save = QPushButton("Save All Paths")
+        btn_save.setObjectName("btn_primary")
+        btn_save.clicked.connect(self._save_paths)
+        btn_row.addWidget(btn_save)
+
+        outer.addLayout(btn_row)
+        return group
+
+    def _add_path_row(self, form: QFormLayout, label: str, key: str,
+                      is_file: bool, test_btn: bool = False):
+        edit = QLineEdit()
+        edit.setMinimumWidth(340)
+        self._path_edits[key] = edit
+
+        row = QWidget()
+        lay = QHBoxLayout(row)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.setSpacing(4)
+        lay.addWidget(edit, 1)
+
+        btn_browse = QPushButton("Browse…")
+        btn_browse.setFixedWidth(72)
+        if is_file:
+            btn_browse.clicked.connect(lambda _, e=edit, k=key: self._browse_file(e, k))
+        else:
+            btn_browse.clicked.connect(lambda _, e=edit: self._browse_folder(e))
+        lay.addWidget(btn_browse)
+
+        if test_btn:
+            btn_test = QPushButton("Test")
+            btn_test.setFixedWidth(48)
+            btn_test.clicked.connect(self._test_tesseract)
+            lay.addWidget(btn_test)
+        else:
+            btn_open = QPushButton("Open")
+            btn_open.setFixedWidth(48)
+            btn_open.clicked.connect(lambda _, e=edit: self._open_in_explorer(e.text()))
+            lay.addWidget(btn_open)
+
+        form.addRow(label, row)
+
+    def _browse_file(self, edit: QLineEdit, key: str):
+        current = edit.text().strip() or str(Path.home())
+        if key == "tesseract_path":
+            path, _ = QFileDialog.getOpenFileName(
+                self, "Find tesseract.exe", current, "Executable (*.exe)"
+            )
+        elif key == "db_path":
+            path, _ = QFileDialog.getSaveFileName(
+                self, "Database file location", current, "SQLite DB (*.db)"
+            )
+        else:
+            path, _ = QFileDialog.getOpenFileName(self, "Select file", current, "All files (*)")
+        if path:
+            edit.setText(path)
+
+    def _browse_folder(self, edit: QLineEdit):
+        current = edit.text().strip() or str(Path.home())
+        path = QFileDialog.getExistingDirectory(self, "Select Folder", current)
+        if path:
+            edit.setText(path)
+
+    def _open_in_explorer(self, path_str: str):
+        if not path_str.strip():
+            return
+        p = Path(path_str.strip())
+        target = p.parent if p.is_file() else p
+        target.mkdir(parents=True, exist_ok=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(target)))
+
+    def _save_paths(self):
+        cfg = get_config()
+        updates = {key: edit.text().strip() for key, edit in self._path_edits.items()
+                   if edit.text().strip()}
+        cfg.update_many(updates)
+
+        # Apply tesseract change immediately
+        if "tesseract_path" in updates and sys.platform == "win32":
+            import pytesseract
+            pytesseract.pytesseract.tesseract_cmd = updates["tesseract_path"]
+
+        # Ensure all folder paths exist
+        for key in ("templates_dir", "input_dir", "output_dir",
+                    "batch_import_dir", "batch_complete_dir"):
+            if key in updates:
+                Path(updates[key]).mkdir(parents=True, exist_ok=True)
+
+        # Ensure DB schema exists at new location
+        if "db_path" in updates:
+            Path(updates["db_path"]).parent.mkdir(parents=True, exist_ok=True)
+            init_db()
+
+        self.status_message.emit("Paths saved")
+        QMessageBox.information(self, "Saved", "All paths have been saved.")
+
+    def _reset_paths(self):
+        reply = QMessageBox.question(
+            self, "Reset Paths",
+            "Reset all paths to their defaults?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        get_config().reset_to_defaults()
+        self._load_paths_into_ui()
+        self.status_message.emit("Paths reset to defaults")
+
+    def _test_tesseract(self):
+        import pytesseract
+        custom = self._path_edits["tesseract_path"].text().strip()
+        if custom:
+            pytesseract.pytesseract.tesseract_cmd = custom
+        try:
+            ver = pytesseract.get_tesseract_version()
+            if custom:
+                get_config().set("tesseract_path", custom)
+            QMessageBox.information(self, "Tesseract OK", f"Tesseract version: {ver}")
+            self.status_message.emit(f"Tesseract {ver} found")
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Tesseract Not Found",
+                f"Could not run Tesseract:\n{e}\n\n"
+                "Linux: sudo apt install tesseract-ocr\n"
+                "Windows: https://github.com/UB-Mannheim/tesseract/wiki"
+            )
+
+    # ── Database maintenance ──────────────────────────────────────────────────
+
+    def _build_database_group(self) -> QGroupBox:
         db_group = QGroupBox("Database")
         db_layout = QVBoxLayout(db_group)
 
         self._db_size_lbl = QLabel()
         db_layout.addWidget(self._db_size_lbl)
 
-        db_path_lbl = QLabel(f"Location: {DB_PATH}")
-        db_path_lbl.setStyleSheet("color: #a0a0b0; font-size: 11px;")
-        db_path_lbl.setWordWrap(True)
-        db_layout.addWidget(db_path_lbl)
+        self._db_path_lbl = QLabel()
+        self._db_path_lbl.setStyleSheet("color: #a0a0b0; font-size: 11px;")
+        self._db_path_lbl.setWordWrap(True)
+        db_layout.addWidget(self._db_path_lbl)
 
-        btn_row2 = QHBoxLayout()
+        btn_row = QHBoxLayout()
+
         btn_vacuum = QPushButton("Compact (VACUUM)")
         btn_vacuum.clicked.connect(self._vacuum)
-        btn_row2.addWidget(btn_vacuum)
+        btn_row.addWidget(btn_vacuum)
 
         btn_backup = QPushButton("Backup Database + Templates…")
         btn_backup.setObjectName("btn_primary")
         btn_backup.clicked.connect(self._backup_db)
-        btn_row2.addWidget(btn_backup)
+        btn_row.addWidget(btn_backup)
 
         btn_wipe = QPushButton("Delete Database Only…")
         btn_wipe.setObjectName("btn_danger")
-        btn_wipe.setToolTip("Permanently delete every transaction and import log from the database")
+        btn_wipe.setToolTip("Permanently delete every transaction and import log")
         btn_wipe.clicked.connect(self._wipe_db)
-        btn_row2.addWidget(btn_wipe)
+        btn_row.addWidget(btn_wipe)
 
         btn_wipe_all = QPushButton("Delete Everything (Database + Templates)…")
         btn_wipe_all.setObjectName("btn_danger")
         btn_wipe_all.setToolTip("Permanently delete all transactions AND all saved templates")
         btn_wipe_all.clicked.connect(self._wipe_all)
-        btn_row2.addWidget(btn_wipe_all)
+        btn_row.addWidget(btn_wipe_all)
 
-        btn_row2.addStretch()
-        db_layout.addLayout(btn_row2)
-        root.addWidget(db_group)
+        btn_row.addStretch()
+        db_layout.addLayout(btn_row)
+        return db_group
 
-        root.addStretch()
-        self._refresh_templates()
-
-    def _load_config(self) -> dict:
-        try:
-            return json.loads(CONFIG_PATH.read_text())
-        except Exception:
-            return {}
-
-    def _save_config(self, data: dict):
-        try:
-            existing = self._load_config()
-            existing.update(data)
-            CONFIG_PATH.write_text(json.dumps(existing, indent=2))
-        except Exception:
-            pass
+    # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -153,10 +301,19 @@ class SettingsWidget(QWidget):
 
     def refresh(self):
         self._refresh_templates()
+        self._refresh_db_info()
+        self._load_paths_into_ui()
+
+    def _load_paths_into_ui(self):
+        cfg = get_config()
+        data = cfg.as_dict()
+        for key, edit in self._path_edits.items():
+            edit.setText(data.get(key, ""))
+
+    def _refresh_db_info(self):
+        cfg = get_config()
         self._db_size_lbl.setText(f"Size: {db_size_mb():.3f} MB")
-        saved_tess = self._load_config().get("tesseract_path", "")
-        if saved_tess and not self._tess_path.text().strip():
-            self._tess_path.setText(saved_tess)
+        self._db_path_lbl.setText(f"Location: {cfg.db_path}")
 
     # ── Templates ─────────────────────────────────────────────────────────────
 
@@ -171,8 +328,7 @@ class SettingsWidget(QWidget):
         item = self._tpl_list.item(row)
         if not item:
             return
-        slug = item.data(256)
-        tpl = load_template(slug)
+        tpl = load_template(item.data(256))
         if tpl:
             self._tpl_detail.setPlainText(json.dumps(tpl, indent=2))
 
@@ -200,11 +356,10 @@ class SettingsWidget(QWidget):
             raise ValueError("Template must have at least one field in 'fields'.")
         for f in fields:
             if "name" not in f:
-                raise ValueError(f"A field is missing a 'name' key.")
+                raise ValueError("A field is missing a 'name' key.")
             if "bbox" not in f:
                 raise ValueError(f"Field '{f.get('name')}' is missing a 'bbox' key.")
-            bbox = f["bbox"]
-            if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+            if not isinstance(f["bbox"], (list, tuple)) or len(f["bbox"]) != 4:
                 raise ValueError(f"Field '{f.get('name')}' bbox must be a list of 4 numbers.")
 
     def _import_template(self):
@@ -227,46 +382,22 @@ class SettingsWidget(QWidget):
         item = self._tpl_list.currentItem()
         if not item:
             return
-        slug = item.data(256)
-        name = item.text()
         reply = QMessageBox.question(
-            self, "Delete Template", f"Delete '{name}'?",
+            self, "Delete Template", f"Delete '{item.text()}'?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         if reply == QMessageBox.StandardButton.Yes:
-            delete_template(slug)
+            delete_template(item.data(256))
             self._refresh_templates()
             self._tpl_detail.clear()
 
-    # ── Tesseract ─────────────────────────────────────────────────────────────
+    # ── Database maintenance ──────────────────────────────────────────────────
 
-    def _browse_tesseract(self):
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Find tesseract.exe",
-            r"C:\Program Files\Tesseract-OCR",
-            "Executable (*.exe)"
-        )
-        if path:
-            self._tess_path.setText(path)
-
-    def _test_tesseract(self):
-        import pytesseract
-        custom = self._tess_path.text().strip()
-        if custom:
-            pytesseract.pytesseract.tesseract_cmd = custom
-        try:
-            ver = pytesseract.get_tesseract_version()
-            if custom:
-                self._save_config({"tesseract_path": custom})
-            QMessageBox.information(self, "Tesseract OK", f"Tesseract version: {ver}")
-            self.status_message.emit(f"Tesseract {ver} found")
-        except Exception as e:
-            QMessageBox.critical(self, "Tesseract Not Found",
-                f"Could not run Tesseract:\n{e}\n\n"
-                "Linux: sudo apt install tesseract-ocr\n"
-                "Windows: install from https://github.com/UB-Mannheim/tesseract/wiki")
-
-    # ── Database ──────────────────────────────────────────────────────────────
+    def _vacuum(self):
+        vacuum_db()
+        self._refresh_db_info()
+        self.status_message.emit("Database compacted")
+        QMessageBox.information(self, "VACUUM", "Database compacted successfully.")
 
     def _wipe_db(self):
         reply = QMessageBox.warning(
@@ -280,14 +411,12 @@ class SettingsWidget(QWidget):
         if reply != QMessageBox.StandardButton.Yes:
             return
         from PyQt6.QtWidgets import QInputDialog
-        text, ok = QInputDialog.getText(
-            self, "Confirm Delete", "Type  DELETE  to confirm:"
-        )
+        text, ok = QInputDialog.getText(self, "Confirm Delete", "Type  DELETE  to confirm:")
         if not ok or text.strip().upper() != "DELETE":
             QMessageBox.information(self, "Cancelled", "Database was not deleted.")
             return
         wipe_db()
-        self._db_size_lbl.setText(f"Size: {db_size_mb():.3f} MB")
+        self._refresh_db_info()
         self.status_message.emit("Database deleted — all transactions removed")
         QMessageBox.information(self, "Done", "All transactions and import logs have been deleted.")
 
@@ -303,30 +432,21 @@ class SettingsWidget(QWidget):
         if reply != QMessageBox.StandardButton.Yes:
             return
         from PyQt6.QtWidgets import QInputDialog
-        text, ok = QInputDialog.getText(
-            self, "Confirm Wipe All", "Type  WIPE  to confirm:"
-        )
+        text, ok = QInputDialog.getText(self, "Confirm Wipe All", "Type  WIPE  to confirm:")
         if not ok or text.strip().upper() != "WIPE":
             QMessageBox.information(self, "Cancelled", "Nothing was deleted.")
             return
         wipe_db()
-        from core.template import TEMPLATES_DIR
-        for json_file in TEMPLATES_DIR.glob("*.json"):
+        for json_file in get_config().templates_dir.glob("*.json"):
             try:
                 json_file.unlink()
             except Exception:
                 pass
         self._refresh_templates()
         self._tpl_detail.clear()
-        self._db_size_lbl.setText(f"Size: {db_size_mb():.3f} MB")
+        self._refresh_db_info()
         self.status_message.emit("All data wiped — database and templates deleted")
         QMessageBox.information(self, "Done", "All transactions and templates have been deleted.")
-
-    def _vacuum(self):
-        vacuum_db()
-        self._db_size_lbl.setText(f"Size: {db_size_mb():.3f} MB")
-        self.status_message.emit("Database compacted")
-        QMessageBox.information(self, "VACUUM", "Database compacted successfully.")
 
     def _backup_db(self):
         path, _ = QFileDialog.getSaveFileName(
@@ -337,12 +457,13 @@ class SettingsWidget(QWidget):
         if not path:
             return
         import zipfile
+        cfg = get_config()
         try:
             with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-                if DB_PATH.exists():
-                    zf.write(DB_PATH, "ocr_master.db")
-                if TEMPLATES_DIR.exists():
-                    for tpl_file in TEMPLATES_DIR.glob("*.json"):
+                if cfg.db_path.exists():
+                    zf.write(cfg.db_path, "ocr_master.db")
+                if cfg.templates_dir.exists():
+                    for tpl_file in cfg.templates_dir.glob("*.json"):
                         zf.write(tpl_file, f"templates/{tpl_file.name}")
             self.status_message.emit(f"Backup saved to {Path(path).name}")
             QMessageBox.information(self, "Backup", f"Database and templates backed up to:\n{path}")

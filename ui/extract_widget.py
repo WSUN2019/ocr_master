@@ -22,9 +22,7 @@ from core.extractor import tesseract_available
 from ui.ocr_worker import OcrWorker
 from ui.history_widget import _add_balance_check
 
-from core.app_paths import APP_DIR
-INPUT_DIR  = APP_DIR / "input_files"
-OUTPUT_DIR = APP_DIR / "output"
+from core.config import get_config
 
 
 # ── Pandas table model (editable) ────────────────────────────────────────────
@@ -300,10 +298,11 @@ class ExtractWidget(QWidget):
     # ── File management ───────────────────────────────────────────────────────
 
     def _add_files(self):
-        INPUT_DIR.mkdir(exist_ok=True)
+        input_dir = get_config().input_dir
+        input_dir.mkdir(parents=True, exist_ok=True)
         paths, _ = QFileDialog.getOpenFileNames(
             self, "Select Statement Files",
-            str(INPUT_DIR),
+            str(input_dir),
             "Images & PDFs (*.jpg *.jpeg *.png *.pdf)"
         )
         for p in paths:
@@ -462,9 +461,10 @@ class ExtractWidget(QWidget):
         if self._model is None:
             QMessageBox.information(self, "Export", "No data to export yet.")
             return
-        OUTPUT_DIR.mkdir(exist_ok=True)
+        output_dir = get_config().output_dir
+        output_dir.mkdir(parents=True, exist_ok=True)
         path, _ = QFileDialog.getSaveFileName(
-            self, "Save CSV", str(OUTPUT_DIR / "transactions.csv"), "CSV (*.csv)"
+            self, "Save CSV", str(output_dir / "transactions.csv"), "CSV (*.csv)"
         )
         if path:
             export_df = self._model.get_df()

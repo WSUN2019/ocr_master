@@ -8,12 +8,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from core.app_paths import APP_DIR
-TEMPLATES_DIR = APP_DIR / "templates"
+from core.config import get_config
+
+
+def _templates_dir() -> Path:
+    return get_config().templates_dir
 
 
 def _ensure_dir():
-    TEMPLATES_DIR.mkdir(exist_ok=True)
+    _templates_dir().mkdir(parents=True, exist_ok=True)
 
 
 def slugify(name: str) -> str:
@@ -24,7 +27,7 @@ def list_templates() -> list[dict]:
     """Return list of {name, slug, path} for all saved templates."""
     _ensure_dir()
     results = []
-    for f in sorted(TEMPLATES_DIR.glob("*.json")):
+    for f in sorted(_templates_dir().glob("*.json")):
         try:
             data = json.loads(f.read_text())
             results.append({"name": data.get("name", f.stem), "slug": f.stem, "path": str(f)})
@@ -35,7 +38,7 @@ def list_templates() -> list[dict]:
 
 def load_template(slug: str) -> Optional[dict]:
     _ensure_dir()
-    path = TEMPLATES_DIR / f"{slug}.json"
+    path = _templates_dir() / f"{slug}.json"
     if not path.exists():
         return None
     return json.loads(path.read_text())
@@ -48,13 +51,13 @@ def save_template(template: dict) -> str:
     template["slug"] = slug
     template.setdefault("version", 1)
     template.setdefault("created_at", datetime.now().isoformat())
-    path = TEMPLATES_DIR / f"{slug}.json"
+    path = _templates_dir() / f"{slug}.json"
     path.write_text(json.dumps(template, indent=2))
     return slug
 
 
 def delete_template(slug: str) -> bool:
-    path = TEMPLATES_DIR / f"{slug}.json"
+    path = _templates_dir() / f"{slug}.json"
     if path.exists():
         path.unlink()
         return True

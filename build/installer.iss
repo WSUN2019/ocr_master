@@ -22,7 +22,7 @@ AppVersion={#AppVersion}
 AppPublisher={#AppPublisher}
 AppPublisherURL={#AppURL}
 AppSupportURL={#AppURL}
-; Install app binaries to Program Files\OCR Master
+; App binaries go to Program Files\OCR Master
 DefaultDirName={autopf}\OCR Master
 DefaultGroupName={#AppName}
 AllowNoIcons=yes
@@ -31,7 +31,6 @@ OutputBaseFilename=OCRMasterSetup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
-; 64-bit Windows required (matches Tesseract w64 build)
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
 ; Installer runs as admin but intentionally writes config to user's AppData
@@ -44,14 +43,11 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Dirs]
-; Create user data folders in AppData (writable without admin rights)
+; AppData dirs (db, templates, config)
 Name: "{userappdata}\{#UserDataName}"
 Name: "{userappdata}\{#UserDataName}\templates"
-Name: "{userappdata}\{#UserDataName}\input_files"
-Name: "{userappdata}\{#UserDataName}\output"
 
 [Files]
-; Main application bundle (output from PyInstaller)
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
@@ -65,10 +61,11 @@ Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(
 [Code]
 
 var
-  TessPage: TInputOptionWizardPage;
+  TessPage:    TInputOptionWizardPage;
+  DataDirPage: TInputDirWizardPage;
   TessAlreadyInstalled: Boolean;
 
-// ── Dependency checks ────────────────────────────────────────────────────────
+// ── Dependency checks ─────────────────────────────────────────────────────────
 
 function TesseractInstalled(): Boolean;
 var
@@ -89,36 +86,48 @@ begin
     RegQueryStringValue(HKLM, 'SOFTWARE\WOW6432Node\Microsoft\VisualStudio\14.0\VC\Runtimes\x64', 'Version', Ver);
 end;
 
-// ── Write config.json to user AppData ────────────────────────────────────────
+// ── Write config.json with all paths ─────────────────────────────────────────
 
-procedure WriteConfig(TessPath: String);
+procedure WriteFullConfig(TessExe: String; DataDir: String);
 var
-  ConfigPath: String;
+  ConfigPath, AppDataOCR: String;
+  EscTess, EscData, EscApp: String;
   Lines: TArrayOfString;
-  EscapedPath: String;
 begin
-  ConfigPath := ExpandConstant('{userappdata}\{#UserDataName}\config.json');
-  EscapedPath := TessPath;
-  StringChange(EscapedPath, '\', '\\');
+  AppDataOCR := ExpandConstant('{userappdata}\{#UserDataName}');
+
+  EscApp  := AppDataOCR; StringChange(EscApp,  '\', '\\');
+  EscTess := TessExe;    StringChange(EscTess, '\', '\\');
+  EscData := DataDir;    StringChange(EscData, '\', '\\');
+
+  ConfigPath := AppDataOCR + '\config.json';
+
   SetArrayLength(Lines, 1);
-  Lines[0] := '{"tesseract_path": "' + EscapedPath + '"}';
+  Lines[0] :=
+    '{' + #13#10 +
+    '  "tesseract_path":    "' + EscTess + '",' + #13#10 +
+    '  "db_path":           "' + EscApp + '\\ocr_master.db",' + #13#10 +
+    '  "templates_dir":     "' + EscApp + '\\templates",' + #13#10 +
+    '  "input_dir":         "' + EscData + '\\input_files",' + #13#10 +
+    '  "output_dir":        "' + EscData + '\\output",' + #13#10 +
+    '  "batch_import_dir":  "' + EscData + '\\batch_import",' + #13#10 +
+    '  "batch_complete_dir":"' + EscData + '\\batch_complete"' + #13#10 +
+    '}';
+
   SaveStringsToFile(ConfigPath, Lines, False);
 end;
 
-// ── Auto-install Tesseract via winget ────────────────────────────────────────
+// ── Tesseract auto-install ────────────────────────────────────────────────────
 
 procedure InstallTesseractAuto();
 var
   ResultCode: Integer;
-  TessExe: String;
 begin
   MsgBox(
     'Tesseract will now be installed automatically.' + #13#10 + #13#10 +
-    'A progress window will appear. Please wait for it to complete before' + #13#10 +
-    'clicking Finish on the next screen.',
+    'A progress window will appear. Please wait for it to finish.',
     mbInformation, MB_OK);
 
-  // Use PowerShell to invoke winget (handles PATH lookup reliably)
   Exec(
     'powershell.exe',
     '-ExecutionPolicy Bypass -WindowStyle Normal -Command ' +
@@ -126,90 +135,109 @@ begin
     '--accept-package-agreements --accept-source-agreements"',
     '', SW_SHOW, ewWaitUntilTerminated, ResultCode);
 
-  TessExe := 'C:\Program Files\Tesseract-OCR\tesseract.exe';
-  if FileExists(TessExe) then
-  begin
-    WriteConfig(TessExe);
-    MsgBox('Tesseract installed successfully.', mbInformation, MB_OK);
-  end else
+  if not FileExists('C:\Program Files\Tesseract-OCR\tesseract.exe') then
   begin
     MsgBox(
-      'Automatic installation did not complete.' + #13#10 + #13#10 +
-      'This can happen if winget is not available on your Windows version.' + #13#10 + #13#10 +
-      'The Tesseract download page will open in your browser.' + #13#10 +
-      'Download: tesseract-ocr-w64-setup-*.exe' + #13#10 + #13#10 +
-      'OCR Master will work once you install Tesseract.',
+      'Automatic installation did not complete.' + #13#10 +
+      'The Tesseract download page will open in your browser.' + #13#10 + #13#10 +
+      'Download: tesseract-ocr-w64-setup-*.exe' + #13#10 +
+      'OCR Master will work once Tesseract is installed.',
       mbError, MB_OK);
-    ShellExec('open', 'https://github.com/UB-Mannheim/tesseract/wiki', '', '', SW_SHOW, ewNoWait, ResultCode);
+    ShellExec('open', 'https://github.com/UB-Mannheim/tesseract/wiki',
+              '', '', SW_SHOW, ewNoWait, ResultCode);
   end;
 end;
 
-// ── Wizard setup ─────────────────────────────────────────────────────────────
+// ── Wizard setup ──────────────────────────────────────────────────────────────
 
 procedure InitializeWizard();
+var
+  AfterID: Integer;
 begin
   TessAlreadyInstalled := TesseractInstalled();
 
+  AfterID := wpSelectDir;
+
+  // Tesseract page (only when not installed)
   if not TessAlreadyInstalled then
   begin
-    // Insert Tesseract page after directory selection
     TessPage := CreateInputOptionPage(
-      wpSelectDir,
+      AfterID,
       'Tesseract OCR Engine',
       'OCR Master requires Tesseract to read bank statements.',
       'Tesseract is not installed on this machine. How would you like to install it?',
-      True,   // exclusive (radio buttons, not checkboxes)
-      False
+      True, False
     );
     TessPage.Add('Install Tesseract automatically  (recommended — needs internet)');
     TessPage.Add('I will install Tesseract manually after setup');
     TessPage.SelectedValueIndex := 0;
+    AfterID := TessPage.ID;
   end;
+
+  // Data folder page (always shown)
+  DataDirPage := CreateInputDirPage(
+    AfterID,
+    'User Data Location',
+    'Where should OCR Master store your files?',
+    'Statement imports, batch jobs, and CSV exports will be saved here.' + #13#10 +
+    'The database and templates are always stored in AppData (not changed here).' + #13#10 + #13#10 +
+    'You can change any path later in the app under Settings.',
+    False, ''
+  );
+  DataDirPage.Add('Data folder (input, batch, output):');
+  DataDirPage.Values[0] := ExpandConstant('{userdocs}\OCR Master');
 end;
 
-// ── Post-install actions ─────────────────────────────────────────────────────
+// ── Post-install ──────────────────────────────────────────────────────────────
 
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ErrorCode: Integer;
-  TessExe: String;
+  TessExe, DataDir: String;
 begin
-  if CurStep = ssPostInstall then
-  begin
-    if TessAlreadyInstalled then
-    begin
-      // Tesseract already present — write config pointing to it
-      TessExe := 'C:\Program Files\Tesseract-OCR\tesseract.exe';
-      if FileExists(TessExe) then
-        WriteConfig(TessExe);
-    end else if Assigned(TessPage) then
-    begin
-      if TessPage.SelectedValueIndex = 0 then
-        InstallTesseractAuto()
-      else
-      begin
-        // Manual: open download page and explain
-        ShellExec('open', 'https://github.com/UB-Mannheim/tesseract/wiki', '', '', SW_SHOW, ewNoWait, ErrorCode);
-        MsgBox(
-          'The Tesseract download page has been opened in your browser.' + #13#10 + #13#10 +
-          'Download and run:  tesseract-ocr-w64-setup-*.exe' + #13#10 + #13#10 +
-          'OCR Master will detect Tesseract automatically once it is installed.',
-          mbInformation, MB_OK);
-      end;
-    end;
+  if CurStep <> ssPostInstall then Exit;
 
-    // Visual C++ Redistributable check (required by Python runtime DLLs)
-    if not VCRedistInstalled() then
+  TessExe := 'C:\Program Files\Tesseract-OCR\tesseract.exe';
+  DataDir  := DataDirPage.Values[0];
+
+  // ── Tesseract ──
+  if not TessAlreadyInstalled then
+  begin
+    if Assigned(TessPage) and (TessPage.SelectedValueIndex = 0) then
+      InstallTesseractAuto()
+    else
     begin
-      if MsgBox(
-        'OCR Master also requires the Microsoft Visual C++ Redistributable (2022, x64).' + #13#10 +
-        'It is NOT currently installed on this machine.' + #13#10 + #13#10 +
-        'Without it the application may fail to start.' + #13#10 + #13#10 +
-        'Would you like to download it now?',
-        mbConfirmation, MB_YESNO) = IDYES then
-      begin
-        ShellExec('open', 'https://aka.ms/vs/17/release/vc_redist.x64.exe', '', '', SW_SHOW, ewNoWait, ErrorCode);
-      end;
+      ShellExec('open', 'https://github.com/UB-Mannheim/tesseract/wiki',
+                '', '', SW_SHOW, ewNoWait, ErrorCode);
+      MsgBox(
+        'The Tesseract download page has been opened in your browser.' + #13#10 + #13#10 +
+        'Download and run:  tesseract-ocr-w64-setup-*.exe' + #13#10 + #13#10 +
+        'OCR Master will detect Tesseract automatically once it is installed.',
+        mbInformation, MB_OK);
+    end;
+  end;
+
+  // ── Create data directories ──
+  ForceDirectories(DataDir + '\input_files');
+  ForceDirectories(DataDir + '\output');
+  ForceDirectories(DataDir + '\batch_import');
+  ForceDirectories(DataDir + '\batch_complete');
+
+  // ── Write config.json ──
+  WriteFullConfig(TessExe, DataDir);
+
+  // ── Visual C++ Redistributable ──
+  if not VCRedistInstalled() then
+  begin
+    if MsgBox(
+      'OCR Master also requires the Microsoft Visual C++ Redistributable (2022, x64).' + #13#10 +
+      'It is NOT currently installed on this machine.' + #13#10 + #13#10 +
+      'Without it the application may fail to start.' + #13#10 + #13#10 +
+      'Would you like to download it now?',
+      mbConfirmation, MB_YESNO) = IDYES then
+    begin
+      ShellExec('open', 'https://aka.ms/vs/17/release/vc_redist.x64.exe',
+                '', '', SW_SHOW, ewNoWait, ErrorCode);
     end;
   end;
 end;

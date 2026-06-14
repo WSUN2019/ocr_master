@@ -23,15 +23,12 @@ import pytesseract
 from PIL import Image
 
 if sys.platform == "win32":
-    pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
     try:
-        import json as _json
-        from core.app_paths import APP_DIR as _APP_DIR
-        _saved_tess = _json.loads((_APP_DIR / "config.json").read_text()).get("tesseract_path", "")
-        if _saved_tess:
-            pytesseract.pytesseract.tesseract_cmd = _saved_tess
+        from core.config import get_config as _get_config
+        _tess = _get_config().tesseract_path
+        pytesseract.pytesseract.tesseract_cmd = _tess or r"C:\Program Files\Tesseract-OCR\tesseract.exe"
     except Exception:
-        pass
+        pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 # Single-call OCR config: treat page as sparse text with a mix of blocks
 _TSS_PAGE = "--psm 11"

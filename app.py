@@ -8,7 +8,9 @@ from pathlib import Path
 # Windows: set Tesseract path before any OCR import
 if sys.platform == "win32":
     import pytesseract
-    pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+    from core.config import get_config
+    _tess = get_config().tesseract_path
+    pytesseract.pytesseract.tesseract_cmd = _tess or r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtGui import QIcon

@@ -10,8 +10,11 @@ from typing import Optional
 
 import pandas as pd
 
-from core.app_paths import APP_DIR
-DB_PATH = APP_DIR / "ocr_master.db"
+from core.config import get_config
+
+
+def _db_path():
+    return get_config().db_path
 
 # Fixed columns that exist as real DB columns (for indexing / filtering)
 _FIXED_COLS = {
@@ -21,7 +24,9 @@ _FIXED_COLS = {
 
 
 def _conn() -> sqlite3.Connection:
-    con = sqlite3.connect(DB_PATH)
+    path = _db_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(str(path))
     con.row_factory = sqlite3.Row
     return con
 
@@ -295,6 +300,7 @@ def vacuum_db():
 
 
 def db_size_mb() -> float:
-    if DB_PATH.exists():
-        return DB_PATH.stat().st_size / 1_048_576
+    path = _db_path()
+    if path.exists():
+        return path.stat().st_size / 1_048_576
     return 0.0
