@@ -46,13 +46,15 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 ; AppData dirs (db, templates, config)
 Name: "{userappdata}\{#UserDataName}"
 Name: "{userappdata}\{#UserDataName}\templates"
+; Default user data dirs (Documents\OCR Master)
+Name: "{userdocs}\{#UserDataName}\input_files"
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; SaiminBank example template — copy to user AppData templates folder (skip if user already has it)
 Source: "..\templates\saiminbank.json"; DestDir: "{userappdata}\{#UserDataName}\templates"; Flags: ignoreversion onlyifdoesntexist
-; SaiminBank example image — stage in app folder so Pascal can copy it to the user-chosen data dir
-Source: "..\input_files\Examples\SaiminBank.png"; DestDir: "{app}\_examples"; Flags: ignoreversion
+; SaiminBank example image — copy directly to default input folder (skip if user already has it)
+Source: "..\input_files\Examples\SaiminBank.png"; DestDir: "{userdocs}\{#UserDataName}\input_files"; Flags: ignoreversion onlyifdoesntexist
 
 [Icons]
 Name: "{group}\{#AppName}";           Filename: "{app}\{#AppExeName}"
@@ -265,13 +267,6 @@ begin
   ForceDirectories(DataDir + '\output');
   ForceDirectories(DataDir + '\batch_import');
   ForceDirectories(DataDir + '\batch_complete');
-
-  // ── Copy SaiminBank example image to input folder (skip if already there) ──
-  if not FileExists(DataDir + '\input_files\SaiminBank.png') then
-    FileCopy(
-      ExpandConstant('{app}') + '\_examples\SaiminBank.png',
-      DataDir + '\input_files\SaiminBank.png',
-      False);
 
   // ── Write config.json ──
   WriteFullConfig(TessExe, DataDir);
