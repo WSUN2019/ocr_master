@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QAction
 
-from core.storage import insert_transactions, df_to_csv_bytes, init_db
+from core.storage import insert_transactions, df_to_csv_bytes, init_db, is_already_imported
 from core.template import list_templates, load_template
 from core.extractor import tesseract_available
 from ui.ocr_worker import OcrWorker
@@ -385,6 +385,19 @@ class ExtractWidget(QWidget):
         if not paths:
             QMessageBox.warning(self, "No Files", "Add files to process first.")
             return
+
+        already = [Path(p).name for p in paths if is_already_imported(Path(p).name)]
+        if already:
+            names = "\n".join(f"  • {n}" for n in already)
+            reply = QMessageBox.question(
+                self, "Already Imported",
+                f"These files were previously imported:\n{names}\n\n"
+                "Import again? This will create duplicate rows in the database.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
 
         template = load_template(slug)
         self._all_rows = []

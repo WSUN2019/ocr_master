@@ -461,12 +461,17 @@ class TemplateBuilderWidget(QWidget):
         # Always show field list from template data
         self._refresh_field_list_from_template(tpl)
 
-        # Auto-load the sample image stored in the template (if still accessible)
-        saved_path = tpl.get("sample_image_path", "")
-        if saved_path and Path(saved_path).exists() and saved_path != self._source_path:
-            self._open_file(saved_path)
+        # Auto-load the sample image stored in the template (if still accessible).
+        # sample_image_path is stored as a filename only; look it up in input_files/.
+        saved_name = tpl.get("sample_image_path", "")
+        if saved_name:
+            from core.app_paths import APP_DIR
+            candidate = APP_DIR / "input_files" / Path(saved_name).name
+            if candidate.exists() and str(candidate) != self._source_path:
+                self._open_file(str(candidate))
+            else:
+                self._apply_template_to_canvas()
         else:
-            # Draw boxes onto whichever image is already open
             self._apply_template_to_canvas()
 
         if not self._source_img:
@@ -571,7 +576,7 @@ class TemplateBuilderWidget(QWidget):
             page_height_pts=h,
             fields=fields,
             row_detection=rd,
-            sample_image_path=self._source_path,
+            sample_image_path=Path(self._source_path).name if self._source_path else "",
             skip_pages=skip_pages,
             page_range=page_range,
         )

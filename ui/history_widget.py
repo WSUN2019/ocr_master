@@ -7,7 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd
-from PyQt6.QtCore import Qt, QAbstractTableModel, QModelIndex, pyqtSignal, QSortFilterProxyModel
+from PyQt6.QtCore import Qt, QAbstractTableModel, QModelIndex, pyqtSignal
 from PyQt6.QtGui import QFont, QColor, QBrush
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
@@ -264,6 +264,19 @@ class PandasModel(QAbstractTableModel):
     def get_df(self):
         return self._df
 
+    def sort(self, column: int, order: Qt.SortOrder = Qt.SortOrder.AscendingOrder):
+        if column < 0 or column >= len(self._cols):
+            return
+        self.layoutAboutToBeChanged.emit()
+        col = self._cols[column]
+        ascending = order == Qt.SortOrder.AscendingOrder
+        try:
+            self._df = self._df.sort_values(col, ascending=ascending, na_position="last")
+            self._df = self._df.reset_index(drop=True)
+        except Exception:
+            pass
+        self.layoutChanged.emit()
+
 
 class HistoryWidget(QWidget):
     status_message = pyqtSignal(str)
@@ -519,10 +532,7 @@ class HistoryWidget(QWidget):
             df = df.sort_values(sort_by, na_position="last").reset_index(drop=True)
         model = PandasModel(df)
         model.edit_requested.connect(self._on_cell_edited)
-        proxy = QSortFilterProxyModel()
-        proxy.setSourceModel(model)
-        proxy.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
-        self._table.setModel(proxy)
+        self._table.setModel(model)
         self._lbl_count.setText(f"{len(df)} rows")
 
         # Size columns to content, then restore user's saved column order

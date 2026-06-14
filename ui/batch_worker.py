@@ -8,7 +8,7 @@ from pathlib import Path
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from core.extractor import extract_with_template
-from core.storage import insert_transactions
+from core.storage import insert_transactions, is_already_imported
 
 
 class BatchWorker(QThread):
@@ -43,6 +43,12 @@ class BatchWorker(QThread):
                 break
 
             self.progress.emit(i, total, fpath.name)
+
+            if is_already_imported(fpath.name):
+                self.log_line.emit(f"⤭  {fpath.name} — already imported, skipping")
+                done_files += 1
+                continue
+
             self.log_line.emit(f"Processing  {fpath.name} …")
 
             try:
@@ -58,14 +64,20 @@ class BatchWorker(QThread):
                 total_rows += n
                 done_files += 1
 
-                # Move to complete folder; avoid clobbering existing files
+                # Move to complete folder; avoid clobbering existing files.
+                # Handled separately so a rename failure doesn't mask a successful insert.
                 dest = self._complete_dir / fpath.name
                 if dest.exists():
                     dest = self._complete_dir / f"{fpath.stem}_{i}{fpath.suffix}"
-                fpath.rename(dest)
+                try:
+                    fpath.rename(dest)
+                    self.log_line.emit(f"✓  {fpath.name} — {n} row(s) saved → moved to complete")
+                except Exception as move_exc:
+                    self.log_line.emit(
+                        f"⚠  {fpath.name} — {n} row(s) saved, but file move failed: {move_exc}"
+                    )
 
                 self.file_done.emit(fpath.name, n)
-                self.log_line.emit(f"✓  {fpath.name} — {n} row(s) saved → moved to complete")
 
             except Exception as exc:
                 self.file_error.emit(fpath.name, str(exc))

@@ -143,6 +143,16 @@ def log_import(filename: str, template_name: str, pages: int = 0,
         )
 
 
+def is_already_imported(filename: str) -> bool:
+    """Return True if this filename appears in import_log (was previously imported)."""
+    init_db()
+    with _conn() as con:
+        count = con.execute(
+            "SELECT COUNT(*) FROM import_log WHERE filename = ?", (filename,)
+        ).fetchone()[0]
+        return count > 0
+
+
 def update_transaction_field(row_id: int, field_name: str, new_value: str,
                              note: str = "") -> bool:
     """

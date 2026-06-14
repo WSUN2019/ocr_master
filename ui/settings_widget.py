@@ -15,7 +15,10 @@ from PyQt6.QtWidgets import (
 )
 
 from core.storage import vacuum_db, wipe_db, db_size_mb, init_db, DB_PATH
-from core.template import list_templates, load_template, delete_template, save_template
+from core.template import list_templates, load_template, delete_template, save_template, TEMPLATES_DIR
+from core.app_paths import APP_DIR
+
+CONFIG_PATH = APP_DIR / "config.json"
 
 
 class SettingsWidget(QWidget):
@@ -130,6 +133,20 @@ class SettingsWidget(QWidget):
         root.addStretch()
         self._refresh_templates()
 
+    def _load_config(self) -> dict:
+        try:
+            return json.loads(CONFIG_PATH.read_text())
+        except Exception:
+            return {}
+
+    def _save_config(self, data: dict):
+        try:
+            existing = self._load_config()
+            existing.update(data)
+            CONFIG_PATH.write_text(json.dumps(existing, indent=2))
+        except Exception:
+            pass
+
     def showEvent(self, event):
         super().showEvent(event)
         self.refresh()
@@ -137,6 +154,9 @@ class SettingsWidget(QWidget):
     def refresh(self):
         self._refresh_templates()
         self._db_size_lbl.setText(f"Size: {db_size_mb():.3f} MB")
+        saved_tess = self._load_config().get("tesseract_path", "")
+        if saved_tess and not self._tess_path.text().strip():
+            self._tess_path.setText(saved_tess)
 
     # ── Templates ─────────────────────────────────────────────────────────────
 
@@ -170,6 +190,23 @@ class SettingsWidget(QWidget):
             Path(path).write_text(json.dumps(tpl, indent=2))
             self.status_message.emit(f"Exported template to {Path(path).name}")
 
+    def _validate_template(self, tpl: dict):
+        if not isinstance(tpl, dict):
+            raise ValueError("Template must be a JSON object.")
+        if not tpl.get("name"):
+            raise ValueError("Template is missing a 'name' field.")
+        fields = tpl.get("fields")
+        if not isinstance(fields, list) or len(fields) == 0:
+            raise ValueError("Template must have at least one field in 'fields'.")
+        for f in fields:
+            if "name" not in f:
+                raise ValueError(f"A field is missing a 'name' key.")
+            if "bbox" not in f:
+                raise ValueError(f"Field '{f.get('name')}' is missing a 'bbox' key.")
+            bbox = f["bbox"]
+            if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+                raise ValueError(f"Field '{f.get('name')}' bbox must be a list of 4 numbers.")
+
     def _import_template(self):
         path, _ = QFileDialog.getOpenFileName(
             self, "Import Template", str(Path.home()), "JSON (*.json)"
@@ -178,6 +215,7 @@ class SettingsWidget(QWidget):
             return
         try:
             tpl = json.loads(Path(path).read_text())
+            self._validate_template(tpl)
             slug = save_template(tpl)
             self._refresh_templates()
             self.status_message.emit(f"Imported template '{tpl.get('name', slug)}'")
@@ -218,6 +256,8 @@ class SettingsWidget(QWidget):
             pytesseract.pytesseract.tesseract_cmd = custom
         try:
             ver = pytesseract.get_tesseract_version()
+            if custom:
+                self._save_config({"tesseract_path": custom})
             QMessageBox.information(self, "Tesseract OK", f"Tesseract version: {ver}")
             self.status_message.emit(f"Tesseract {ver} found")
         except Exception as e:
@@ -290,11 +330,21 @@ class SettingsWidget(QWidget):
 
     def _backup_db(self):
         path, _ = QFileDialog.getSaveFileName(
-            self, "Backup Database", str(Path.home() / "ocr_master_backup.db"),
-            "SQLite (*.db)"
+            self, "Backup (Database + Templates)",
+            str(Path.home() / "ocr_master_backup.zip"),
+            "ZIP archive (*.zip)"
         )
-        if path and DB_PATH.exists():
-            import shutil
-            shutil.copy2(DB_PATH, path)
-            self.status_message.emit(f"Database backed up to {Path(path).name}")
-            QMessageBox.information(self, "Backup", f"Database backed up to:\n{path}")
+        if not path:
+            return
+        import zipfile
+        try:
+            with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+                if DB_PATH.exists():
+                    zf.write(DB_PATH, "ocr_master.db")
+                if TEMPLATES_DIR.exists():
+                    for tpl_file in TEMPLATES_DIR.glob("*.json"):
+                        zf.write(tpl_file, f"templates/{tpl_file.name}")
+            self.status_message.emit(f"Backup saved to {Path(path).name}")
+            QMessageBox.information(self, "Backup", f"Database and templates backed up to:\n{path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Backup Failed", str(e))
