@@ -53,15 +53,28 @@ function Install-Via-Winget {
 }
 
 
-# ── Helper: find python.exe in common install locations ───────────────────────
+# ── Helper: test whether a command is a real Python (not the Windows Store stub) ──
+
+function Test-RealPython {
+    param([string]$Cmd)
+    try {
+        $out = & $Cmd --version 2>&1
+        # The Windows App Execution Alias stub outputs "Python was not found; run without
+        # arguments to install from the Microsoft Store..." instead of "Python 3.x.y"
+        return ($out -match "^Python \d")
+    } catch { return $false }
+}
+
+
+# ── Helper: find a real python.exe in common install locations ────────────────
 
 function Find-Python {
-    # Search %LOCALAPPDATA%\Programs\Python (user install, winget default)
+    # Search %LOCALAPPDATA%\Programs\Python (winget / user install default)
     $found = Get-ChildItem "$env:LOCALAPPDATA\Programs\Python" -Filter "python.exe" -Recurse `
              -ErrorAction SilentlyContinue |
              Sort-Object FullName -Descending |
              Select-Object -First 1 -ExpandProperty FullName
-    if ($found) { return $found }
+    if ($found -and (Test-RealPython $found)) { return $found }
 
     # Search C:\Python3xx (system install)
     $found = Get-ChildItem "C:\" -Filter "python.exe" -Depth 2 `
@@ -69,7 +82,8 @@ function Find-Python {
              Where-Object { $_.FullName -match "Python3" } |
              Sort-Object FullName -Descending |
              Select-Object -First 1 -ExpandProperty FullName
-    return $found
+    if ($found -and (Test-RealPython $found)) { return $found }
+    return $null
 }
 
 
@@ -79,10 +93,12 @@ Write-Host "[1/3] Checking Python..." -ForegroundColor Yellow
 
 $PythonCmd = $null
 
-if (Get-Command python -ErrorAction SilentlyContinue) {
-    $PythonCmd = "python"
-} elseif (Get-Command py -ErrorAction SilentlyContinue) {
-    $PythonCmd = "py"
+# Check PATH candidates — skip the Windows Store stub if present
+foreach ($candidate in @("python", "py")) {
+    if ((Get-Command $candidate -ErrorAction SilentlyContinue) -and (Test-RealPython $candidate)) {
+        $PythonCmd = $candidate
+        break
+    }
 }
 
 if ($PythonCmd) {
@@ -93,11 +109,13 @@ if ($PythonCmd) {
 
     if ($installed) {
         Refresh-Path
-        if (Get-Command python -ErrorAction SilentlyContinue) {
-            $PythonCmd = "python"
-        } elseif (Get-Command py -ErrorAction SilentlyContinue) {
-            $PythonCmd = "py"
-        } else {
+        foreach ($candidate in @("python", "py")) {
+            if ((Get-Command $candidate -ErrorAction SilentlyContinue) -and (Test-RealPython $candidate)) {
+                $PythonCmd = $candidate
+                break
+            }
+        }
+        if (-not $PythonCmd) {
             # PATH not updated yet in this session — find the exe directly
             $exePath = Find-Python
             if ($exePath) {
