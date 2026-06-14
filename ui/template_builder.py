@@ -68,13 +68,23 @@ class TemplateBuilderWidget(QWidget):
 
         root.addLayout(title_row)
 
-        # ── Template selector ─────────────────────────────────────────────────
+        # ── Template bar: editable combo + Save + New + Delete ───────────────
+        # The combo IS the name field — type to name a new template or pick an
+        # existing one from the list. Save always uses whatever text is shown.
         tpl_row = QHBoxLayout()
         tpl_row.addWidget(QLabel("Template:"))
         self._tpl_combo = QComboBox()
-        self._tpl_combo.setMinimumWidth(200)
+        self._tpl_combo.setEditable(True)
+        self._tpl_combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        self._tpl_combo.lineEdit().setPlaceholderText("Select or type a template name…")
+        self._tpl_combo.setMinimumWidth(260)
         self._tpl_combo.currentIndexChanged.connect(self._load_selected_template)
         tpl_row.addWidget(self._tpl_combo)
+
+        btn_save = QPushButton("Save")
+        btn_save.setObjectName("btn_primary")
+        btn_save.clicked.connect(self._save_template)
+        tpl_row.addWidget(btn_save)
 
         btn_new = QPushButton("New")
         btn_new.clicked.connect(self._new_template)
@@ -87,20 +97,6 @@ class TemplateBuilderWidget(QWidget):
 
         tpl_row.addStretch()
         root.addLayout(tpl_row)
-
-        # ── Name + Save row (immediately below template selector) ─────────────
-        save_row = QHBoxLayout()
-        save_row.addWidget(QLabel("Template name:"))
-        self._name_edit = QLineEdit()
-        self._name_edit.setPlaceholderText("e.g. Chase Checking 2024")
-        self._name_edit.setMinimumWidth(220)
-        save_row.addWidget(self._name_edit)
-        btn_save_top = QPushButton("Save Template")
-        btn_save_top.setObjectName("btn_primary")
-        btn_save_top.clicked.connect(self._save_template)
-        save_row.addWidget(btn_save_top)
-        save_row.addStretch()
-        root.addLayout(save_row)
 
         # ── Main splitter: canvas | right panel ───────────────────────────────
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -429,11 +425,25 @@ class TemplateBuilderWidget(QWidget):
     # ── Template CRUD ─────────────────────────────────────────────────────────
 
     def _refresh_template_list(self):
+        current_slug = self._tpl_combo.itemData(self._tpl_combo.currentIndex())
+        typed_text   = self._tpl_combo.currentText()
+
         self._tpl_combo.blockSignals(True)
         self._tpl_combo.clear()
-        self._tpl_combo.addItem("— New template —", None)
         for t in list_templates():
             self._tpl_combo.addItem(t["name"], t["slug"])
+
+        # Restore previous selection if slug still exists; else restore typed text
+        if current_slug:
+            idx = self._tpl_combo.findData(current_slug)
+            if idx >= 0:
+                self._tpl_combo.setCurrentIndex(idx)
+            else:
+                self._tpl_combo.setCurrentIndex(-1)
+                self._tpl_combo.setEditText(typed_text)
+        else:
+            self._tpl_combo.setCurrentIndex(-1)
+            self._tpl_combo.setEditText(typed_text)
         self._tpl_combo.blockSignals(False)
 
     def _load_selected_template(self):
@@ -450,9 +460,7 @@ class TemplateBuilderWidget(QWidget):
         if not tpl:
             return
         self._current_tpl = tpl
-
-        # Populate settings
-        self._name_edit.setText(tpl.get("name", ""))
+        # combo already shows the template name — no separate name field to update
         rd = tpl.get("row_detection", {})
         strategy = rd.get("strategy", "fixed_regions")
         idx = self._strategy_combo.findData(strategy)
@@ -517,9 +525,9 @@ class TemplateBuilderWidget(QWidget):
 
     def _new_template(self):
         self._tpl_combo.blockSignals(True)
-        self._tpl_combo.setCurrentIndex(0)
+        self._tpl_combo.setCurrentIndex(-1)
+        self._tpl_combo.clearEditText()
         self._tpl_combo.blockSignals(False)
-        self._name_edit.clear()
         self._current_tpl = None
         self._source_img = None
         self._source_path = ""
@@ -535,11 +543,12 @@ class TemplateBuilderWidget(QWidget):
         self._page_to.setValue(0)
 
     def _delete_template(self):
-        slug = self._tpl_combo.currentData()
+        idx  = self._tpl_combo.currentIndex()
+        slug = self._tpl_combo.itemData(idx)
         if not slug:
             QMessageBox.information(self, "Delete", "No saved template selected.")
             return
-        name = self._tpl_combo.currentText()
+        name = self._tpl_combo.itemText(idx)   # use stored name, not typed text
         reply = QMessageBox.question(
             self, "Delete Template",
             f"Delete template '{name}'?",
@@ -552,9 +561,10 @@ class TemplateBuilderWidget(QWidget):
             self.status_message.emit(f"Deleted template '{name}'")
 
     def _save_template(self):
-        name = self._name_edit.text().strip()
+        name = self._tpl_combo.currentText().strip()
         if not name:
-            QMessageBox.warning(self, "Save Template", "Please enter a template name.")
+            QMessageBox.warning(self, "Save Template",
+                "Enter a template name in the field at the top before saving.")
             return
         fields = self._canvas.get_field_defs()
         if not fields:
@@ -587,6 +597,8 @@ class TemplateBuilderWidget(QWidget):
         pt = self._page_to.value()
         page_range = [pf, pt] if (pf > 0 or pt > 0) else []
 
+        old_slug = self._tpl_combo.itemData(self._tpl_combo.currentIndex())
+
         tpl = build_template(
             name=name,
             page_width_pts=w,
@@ -598,12 +610,19 @@ class TemplateBuilderWidget(QWidget):
             page_range=page_range,
         )
         slug = save_template(tpl)
+
+        # If the user renamed the template the slug changes — remove the old file
+        if old_slug and old_slug != slug:
+            delete_template(old_slug)
+
         self._refresh_template_list()
 
-        # Select the just-saved template in the combo
+        # Select the just-saved template so the combo reflects the saved state
+        self._tpl_combo.blockSignals(True)
         idx = self._tpl_combo.findData(slug)
         if idx >= 0:
             self._tpl_combo.setCurrentIndex(idx)
+        self._tpl_combo.blockSignals(False)
 
         self.status_message.emit(f"Saved template '{name}'")
         QMessageBox.information(self, "Saved", f"Template '{name}' saved with {len(fields)} field(s).")
