@@ -101,6 +101,7 @@ class TemplateBuilderWidget(QWidget):
 
         # Right panel — fixed width, scrollable when app is resized small
         right = QWidget()
+        right.setMaximumWidth(290)
         right_layout = QVBoxLayout(right)
         right_layout.setContentsMargins(8, 0, 0, 0)
         right_layout.setSpacing(10)
