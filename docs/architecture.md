@@ -9,16 +9,17 @@ A fully local, offline PyQt6 desktop application. No web server, no cloud, no ex
 ## Stack
 
 | Layer | Technology | Purpose |
-|---|---|---|
+|-------|-----------|---------|
 | UI | `PyQt6` | Native desktop window, sidebar navigation, widgets |
-| PDF rendering | `pymupdf` (fitz) | Render PDF pages to images at 300 DPI for OCR; 2× for canvas display |
+| PDF rendering | `pymupdf` (fitz) | Render PDF pages to images at 300 DPI for OCR; 2x for canvas display |
 | OCR | `pytesseract` + Tesseract | Extract text with word-level bounding boxes (`image_to_data`) |
 | PDF text | `pdfplumber` | Supplemental PDF text extraction |
 | Data | `pandas` | In-memory DataFrame for table display and manipulation |
 | Storage | `sqlite3` (stdlib) | Local persistent database — transactions + import log |
 | Export | `csv` / `pandas` | Flat-file CSV output |
-| Templates | JSON files | Human-readable field→bbox mappings, one file per bank layout |
+| Templates | JSON files | Human-readable field-to-bbox mappings, one file per bank layout |
 | Image processing | `Pillow` | PIL Image conversion between formats |
+| Config | `json` (stdlib) | User-configurable paths written to `config.json` |
 
 ---
 
@@ -30,6 +31,7 @@ ocr_master/
 │
 ├── core/                     # Backend logic (no UI dependencies)
 │   ├── app_paths.py          # Data directory resolver (dev vs frozen/installed)
+│   ├── config.py             # Singleton config manager — all 7 user-configurable paths
 │   ├── extractor.py          # Tesseract OCR + field mapping from templates
 │   ├── renderer.py           # PDF page → PIL Image + coordinate scaling
 │   ├── storage.py            # SQLite read/write, CSV export
@@ -44,14 +46,14 @@ ocr_master/
 │   ├── batch_widget.py       # Batch folder processing UI
 │   ├── batch_worker.py       # Threaded batch worker (QThread)
 │   ├── history_widget.py     # Query + re-export saved transactions
-│   ├── settings_widget.py    # Template management
-│   ├── help_widget.py        # Help documentation
-│   ├── about_widget.py       # App info
-│   └── styles.py             # PyQt6 stylesheet (dark theme)
+│   ├── settings_widget.py    # Template management + configurable paths
+│   ├── help_widget.py        # Workflow guide
+│   ├── about_widget.py       # App info + experiment notes
+│   └── styles.py             # PyQt6 stylesheet (light theme)
 │
 ├── build/                    # Windows packaging
 │   ├── build_windows.bat     # Double-click launcher for the build script
-│   ├── build_windows.ps1     # Full build: deps → PyInstaller → Inno Setup
+│   ├── build_windows.ps1     # Full build: clean → deps → PyInstaller → Inno Setup
 │   ├── OCRMaster.spec        # PyInstaller configuration
 │   └── installer.iss         # Inno Setup script → OCRMasterSetup.exe
 │
@@ -63,18 +65,34 @@ ocr_master/
 
 ---
 
-## Data Directory
+## Data Directory & Configurable Paths
 
-`core/app_paths.py` resolves where user data lives:
+### Path Resolution
+
+`core/app_paths.py` resolves the app data root (`APP_DIR`):
 
 | Mode | `APP_DIR` |
-|---|---|
+|------|----------|
 | Development (`python app.py`) | Repo root |
 | Installed / frozen (`OCRMaster.exe`) | `%APPDATA%\OCR Master\` |
 
-User data stored under `APP_DIR`: `templates/`, `ocr_master.db`, `config.json`, `input_files/`, `output/`
+### Configurable Paths (core/config.py)
 
-Installing to `%APPDATA%` (not Program Files) means no admin rights needed to read/write user data after install.
+All 7 paths are user-configurable and stored in `config.json` (in `APP_DIR`). Defaults when installed:
+
+| Path key | Default location | Purpose |
+|----------|-----------------|---------|
+| `tesseract_path` | `C:\Program Files\Tesseract-OCR\tesseract.exe` | OCR engine binary |
+| `db_path` | `%APPDATA%\OCR Master\ocr_master.db` | Transaction database |
+| `templates_dir` | `%APPDATA%\OCR Master\templates\` | Bank layout templates |
+| `input_dir` | `Documents\OCR Master\input_files\` | Statement imports |
+| `output_dir` | `Documents\OCR Master\output\` | CSV exports |
+| `batch_import_dir` | `Documents\OCR Master\batch_import\` | Batch input folder |
+| `batch_complete_dir` | `Documents\OCR Master\batch_complete\` | Processed files |
+
+All consumers call `get_config().<property>` at runtime — never cached at import time — so path changes in Settings take effect immediately without a restart.
+
+Installing to `%APPDATA%` means no admin rights are needed for day-to-day read/write. The installer writes all 7 paths to `config.json` on first install, using the data folder the user selects in the wizard.
 
 ---
 
@@ -83,7 +101,7 @@ Installing to `%APPDATA%` (not Program Files) means no admin rights needed to re
 ### How It Works
 
 1. User loads a sample bank statement image or PDF
-2. PDF page is rendered at 2× scale and displayed on a canvas widget
+2. PDF page is rendered at 2x scale and displayed on a canvas widget
 3. User draws rectangles over each data field (date, description, debit, credit, balance)
 4. Each rectangle is labeled with a field name and optional flags (Repeat, Sub-group, Group Anchor)
 5. Template saved as `templates/<slug>.json`
@@ -92,12 +110,12 @@ Installing to `%APPDATA%` (not Program Files) means no admin rights needed to re
 ### Coordinate System
 
 ```
-PDF canvas display (2× scale)     OCR rendering (300/72 DPI scale)
-  origin: top-left                   origin: top-left
-  units: pixels at 2× DPI           units: pixels at 300 DPI
+PDF canvas display (2x scale)       OCR rendering (300/72 DPI scale)
+  origin: top-left                    origin: top-left
+  units: pixels at 2x DPI            units: pixels at 300 DPI
 
-Template stores: canvas pixel coords (2× space)
-OCR scaling:     ratio = (300/72) / 2.0  ≈ 2.083×
+Template stores: canvas pixel coords (2x space)
+OCR scaling:     ratio = (300/72) / 2.0  ~2.083x
 
 extractor.py applies this ratio to all bbox coords before
 filtering Tesseract word positions.
@@ -117,7 +135,7 @@ filtering Tesseract word positions.
       "name": "transaction_date",
       "bbox": [42.0, 310.0, 180.0, 2900.0],
       "repeat": false,
-      "sub_group": true,
+      "sub_group": false,
       "group_anchor": true,
       "concat_in_group": false
     },
@@ -146,7 +164,7 @@ filtering Tesseract word positions.
 ### Field Flags
 
 | Flag | Effect |
-|---|---|
+|------|--------|
 | `repeat` | Value appears once (header); copied to every transaction row |
 | `sub_group` | Fill-down: value appears once per group, blank rows inherit it |
 | `group_anchor` | A new non-null value here starts a new transaction group |
@@ -155,7 +173,7 @@ filtering Tesseract word positions.
 ### Row Detection Strategies
 
 | Strategy | Use case |
-|---|---|
+|----------|---------|
 | `fixed_regions` | Tall column bboxes; words filtered by Y-band into rows. Best for most statements. |
 | `repeat_vertical` | One row drawn; extractor steps down at fixed `row_height_pts` intervals. |
 
@@ -166,43 +184,43 @@ filtering Tesseract word positions.
 ```
 TEMPLATE BUILDER (one-time per bank format)
   Load sample image/PDF
-        │
-        ▼
-  renderer.py: PDF page → PIL Image (2× scale for canvas display)
-        │
-        ▼
+        |
+        v
+  renderer.py: PDF page -> PIL Image (2x scale for canvas display)
+        |
+        v
   canvas_widget.py: user draws rectangles, labels each field
-        │
-        ▼
+        |
+        v
   template.py: save field bboxes (canvas pixel coords) to templates/<slug>.json
 
 
 EXTRACTION (for each new statement)
   Load file + select template
-        │
-        ▼
-  extractor.py: _load_pages() — PDF rendered at 300 DPI via pymupdf
-        │
-        ▼
-  extractor.py: _scale_template_for_pdf() — scale canvas coords to 300 DPI space
-        │
-        ▼
-  extractor.py: _ocr_page() — single Tesseract call via image_to_data()
+        |
+        v
+  extractor.py: _load_pages() -- PDF rendered at 300 DPI via pymupdf
+        |
+        v
+  extractor.py: _scale_template_for_pdf() -- scale canvas coords to 300 DPI space
+        |
+        v
+  extractor.py: _ocr_page() -- single Tesseract call via image_to_data()
                 returns word list with {text, left, top, right, bottom}
-        │
-        ▼
+        |
+        v
   extractor.py: _extract_fixed_regions() or _extract_repeat_vertical()
                 filters words into field bboxes, clusters by Y-band into rows
-        │
-        ▼
-  Optional: _apply_row_grouping() — collapse multi-line transactions
+        |
+        v
+  Optional: _apply_row_grouping() -- collapse multi-line transactions
   Optional: fill-forward for sub_group fields
-        │
-        ▼
-  List of row dicts → pandas DataFrame → UI table display
-        │
-        ├── inline edit → save to SQLite (storage.py)
-        └── CSV export
+        |
+        v
+  List of row dicts -> pandas DataFrame -> UI table display
+        |
+        +-- inline edit -> save to SQLite (storage.py)
+        +-- CSV export
 ```
 
 ---
@@ -244,14 +262,16 @@ Templates are stored as JSON files in `templates/` — not in SQLite — so they
 
 ```
 build_windows.ps1
-  │
-  ├─ pip install -r requirements.txt
-  ├─ pip install pyinstaller
-  ├─ pyinstaller build\OCRMaster.spec
-  │    └─ Output: dist\OCRMaster\OCRMaster.exe  (self-contained folder)
-  │
-  └─ iscc build\installer.iss
-       └─ Output: build\Output\OCRMasterSetup.exe  (distribute this)
+  |
+  +- Clean: dist\OCRMaster\, build\OCRMaster\, build\Output\
+  |
+  +- pip install -r requirements.txt
+  +- pip install pyinstaller
+  +- pyinstaller build\OCRMaster.spec
+  |    +- Output: dist\OCRMaster\OCRMaster.exe  (self-contained folder)
+  |
+  +- iscc build\installer.iss
+       +- Output: build\Output\OCRMasterSetup.exe  (distribute this)
 ```
 
 ### PyInstaller Notes (`OCRMaster.spec`)
@@ -263,8 +283,9 @@ build_windows.ps1
 
 ### Installer Notes (`installer.iss`)
 
-- App binaries → `C:\Program Files\OCR Master\`
-- User data dirs created → `%APPDATA%\OCR Master\`
-- Tesseract wizard page: auto-install via winget, or manual download
-- `config.json` written to `%APPDATA%\OCR Master\` pointing to Tesseract path
+- App binaries -> `C:\Program Files\OCR Master\`
+- Wizard page: Tesseract (auto via winget or manual)
+- Wizard page: data folder picker (default `Documents\OCR Master\`)
+- Writes complete 7-path `config.json` to `%APPDATA%\OCR Master\` at install completion
+- Creates all data subdirectories
 - Uninstall asks whether to delete user data or keep it

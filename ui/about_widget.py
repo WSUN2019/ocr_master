@@ -189,6 +189,41 @@ class AboutWidget(QWidget):
         sl.addWidget(note)
         root.addWidget(sec)
 
+        # ── Experiment ────────────────────────────────────────────────────────
+        exp = QGroupBox("About This Project")
+        exp.setStyleSheet(_CARD_STYLE)
+        el = QVBoxLayout(exp)
+        el.setSpacing(10)
+
+        exp_text = QLabel(
+            "OCR Master was built as an experiment: use VS Code + Claude Code "
+            "(Anthropic's AI coding assistant) to write a fully functioning desktop "
+            "application from scratch — including a Windows .exe installer and a "
+            "documented path to Microsoft Store publishing — with no prior codebase.\n\n"
+            "The experiment confirmed that AI-assisted coding delivers remarkable "
+            "speed through the first 80% of a project. Architecture, core logic, "
+            "UI layout, OCR pipeline, and the build/installer system all came "
+            "together rapidly.\n\n"
+            "The final 20% — true polish, edge-case handling, and production-grade "
+            "fit-and-finish — proved to take as much effort as the first 80%. "
+            "Layout quirks, button sizing, cascading stylesheet bugs, and subtle UX "
+            "details each required careful human judgment that AI alone could not "
+            "reliably close out.\n\n"
+            "Conclusion: AI coding assistance is a genuine force multiplier for "
+            "getting to a working product fast. But the classic Tortoise and Hare "
+            "dynamic applies — the finish line of a truly polished product still "
+            "demands the same deliberate craft it always has."
+        )
+        exp_text.setWordWrap(True)
+        exp_text.setStyleSheet(f"color: {_BODY}; font-size: 12px; background: transparent;")
+        el.addWidget(exp_text)
+
+        built_with = QLabel("Built with: VS Code · Claude Code (claude-sonnet-4-6) · Python 3.11 · PyQt6")
+        built_with.setStyleSheet(f"color: {_MUTED}; font-size: 11px; background: transparent;")
+        el.addWidget(built_with)
+
+        root.addWidget(exp)
+
         root.addStretch()
         scroll.setWidget(body)
         outer.addWidget(scroll)
