@@ -93,18 +93,31 @@ if (Get-Command python -ErrorAction SilentlyContinue) {
             Write-Host "      Python ready: $ver" -ForegroundColor Green
             $pythonOk = $true
         } elseif (Get-Command py -ErrorAction SilentlyContinue) {
-            # Alias py -> python for the rest of this session
             Set-Alias python py -Scope Script
             $ver = python --version 2>&1
             Write-Host "      Python ready (via py launcher): $ver" -ForegroundColor Green
             $pythonOk = $true
         } else {
-            Write-Host ""
-            Write-Host "[NOTE] Python was installed but is not yet on PATH in this window." -ForegroundColor Yellow
-            Write-Host "       Close this window, re-open it, and run build_windows.bat again."
-            Write-Host ""
-            Read-Host "Press Enter to exit"
-            exit 1
+            # Last resort: find python.exe directly in common winget install paths
+            $pyExe = Get-ChildItem "$env:LOCALAPPDATA\Programs\Python" -Filter "python.exe" -Recurse -ErrorAction SilentlyContinue |
+                     Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
+            if (-not $pyExe) {
+                $pyExe = Get-ChildItem "C:\Python*" -Filter "python.exe" -ErrorAction SilentlyContinue |
+                         Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
+            }
+            if ($pyExe) {
+                Set-Alias python $pyExe -Scope Script
+                $ver = python --version 2>&1
+                Write-Host "      Python ready (found at $pyExe): $ver" -ForegroundColor Green
+                $pythonOk = $true
+            } else {
+                Write-Host ""
+                Write-Host "[NOTE] Python was installed but is not yet on PATH in this window." -ForegroundColor Yellow
+                Write-Host "       Close this window, re-open it, and run build_windows.bat again."
+                Write-Host ""
+                Read-Host "Press Enter to exit"
+                exit 1
+            }
         }
     } else {
         Write-Host ""
