@@ -19,7 +19,7 @@ if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
 python --version
 
 # Step 2: Install dependencies
-Write-Host "[1/3] Installing Python dependencies..." -ForegroundColor Yellow
+Write-Host "[1/4] Installing Python dependencies..." -ForegroundColor Yellow
 pip install -r requirements.txt --quiet
 pip install pyinstaller --quiet
 if ($LASTEXITCODE -ne 0) {
@@ -29,7 +29,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # Step 3: Run PyInstaller
-Write-Host "[2/3] Building executable with PyInstaller..." -ForegroundColor Yellow
+Write-Host "[2/4] Building executable with PyInstaller..." -ForegroundColor Yellow
 pyinstaller build\OCRMaster.spec --noconfirm
 if ($LASTEXITCODE -ne 0) {
     Write-Host "[ERROR] PyInstaller build failed." -ForegroundColor Red
@@ -38,13 +38,56 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host ""
-Write-Host "[3/3] Done!" -ForegroundColor Green
+Write-Host " Executable: dist\OCRMaster\OCRMaster.exe" -ForegroundColor Green
+Write-Host " Tip: Test it before building the installer."
 Write-Host ""
-Write-Host " Output: dist\OCRMaster\OCRMaster.exe"
-Write-Host ""
-Write-Host " Next steps:"
-Write-Host "   - Test:    double-click dist\OCRMaster\OCRMaster.exe"
-Write-Host "   - Install: open build\installer.iss in Inno Setup Compiler and press F9"
-Write-Host "              Output will be: build\Output\OCRMasterSetup.exe"
+
+# Step 4: Compile installer with Inno Setup (if available)
+Write-Host "[3/4] Looking for Inno Setup compiler (iscc)..." -ForegroundColor Yellow
+
+# Common install locations for Inno Setup
+$IsccCandidates = @(
+    "iscc",   # in PATH
+    "${env:LOCALAPPDATA}\Programs\Inno Setup 6\iscc.exe",
+    "${env:ProgramFiles(x86)}\Inno Setup 6\iscc.exe",
+    "${env:ProgramFiles}\Inno Setup 6\iscc.exe",
+    "${env:ProgramFiles(x86)}\Inno Setup 5\iscc.exe"
+)
+
+$IsccPath = $null
+foreach ($candidate in $IsccCandidates) {
+    if (Get-Command $candidate -ErrorAction SilentlyContinue) {
+        $IsccPath = $candidate
+        break
+    } elseif (Test-Path $candidate) {
+        $IsccPath = $candidate
+        break
+    }
+}
+
+if ($IsccPath) {
+    Write-Host "[3/4] Compiling installer with Inno Setup..." -ForegroundColor Yellow
+    & $IsccPath "build\installer.iss"
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host ""
+        Write-Host " Installer: build\Output\OCRMasterSetup.exe" -ForegroundColor Green
+        Write-Host ""
+        Write-Host "[4/4] Build complete!" -ForegroundColor Green
+        Write-Host ""
+        Write-Host " Distribute:  build\Output\OCRMasterSetup.exe"
+    } else {
+        Write-Host "[ERROR] Inno Setup compilation failed." -ForegroundColor Red
+    }
+} else {
+    Write-Host "[3/4] Inno Setup not found — skipping installer build." -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host " To build the installer:"
+    Write-Host "   1. Download Inno Setup free from https://jrsoftware.org/isinfo.php"
+    Write-Host "   2. Open build\installer.iss in Inno Setup Compiler and press F9"
+    Write-Host "      Output: build\Output\OCRMasterSetup.exe"
+    Write-Host ""
+    Write-Host "[4/4] Done (installer step skipped)." -ForegroundColor Yellow
+}
+
 Write-Host ""
 Read-Host "Press Enter to exit"

@@ -46,6 +46,7 @@ build/*.exe
 build/*.pkg
 build/Output/
 build/work/
+build/OCRMaster/
 
 # Virtual environments
 .venv/

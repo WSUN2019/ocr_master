@@ -20,84 +20,100 @@ A fully local, offline desktop application for extracting structured transaction
 - **CSV export** — export any filtered view to a flat file
 - **History & search** — query by date range, template, or keyword; continue editing saved transactions; delete batches
 
-## Requirements
+---
 
-**Python packages:**
-```bash
-pip install -r requirements.txt
-```
+## Windows — Install for end users
 
-**Tesseract OCR engine** (system install):
-```bash
-# Linux
-sudo apt-get install -y tesseract-ocr
-
-# macOS
-brew install tesseract
-
-# Windows — download installer from:
-# https://github.com/UB-Mannheim/tesseract/wiki
-```
-
-## Run (development)
-
-```bash
-# Linux / macOS
-./run_in_linux.sh
-# or
-python3 app.py
-
-# Windows
-run_in_windows.bat
-```
-
-## Windows — Build a distributable installer
-
-To give customers a double-click installer (`OCRMasterSetup.exe`):
-
-### Prerequisites (one-time, on a Windows machine)
-1. **Python 3.11+** — [python.org](https://www.python.org/downloads/) (check "Add to PATH")
-2. **Tesseract OCR** — [UB-Mannheim installer](https://github.com/UB-Mannheim/tesseract/wiki) — install the `tesseract-ocr-w64-setup-*.exe`; add to PATH when prompted
-3. **Inno Setup** — [jrsoftware.org](https://jrsoftware.org/isinfo.php) (free, for creating the installer)
-
-### Build steps
-```powershell
-# 1. Clone the repo
-# 2. Double-click build\build_windows.bat  (easiest)
-#    Or right-click build\build_windows.ps1 → "Run with PowerShell"
-#    Or from a terminal:
-powershell -ExecutionPolicy Bypass -File build\build_windows.ps1
-
-# 3. Test the raw exe
-dist\OCRMaster\OCRMaster.exe
-
-# 4. Build the installer
-#    Open build\installer.iss in Inno Setup Compiler → press F9
-#    Output: build\Output\OCRMasterSetup.exe
-```
+**Just run `OCRMasterSetup.exe`** — that single file installs everything.
 
 The installer:
-- Copies the app to `Program Files\OCRMaster`
-- Creates Start Menu and optional Desktop shortcuts
-- Detects if Tesseract is missing and offers to open the download page
-- Includes an uninstaller
+- Installs the app to `C:\Program Files\OCR Master\`
+- Offers to install Tesseract OCR automatically (via winget) or manually
+- Creates Start Menu + optional Desktop shortcuts
+- Stores user data (templates, history, settings) in `%APPDATA%\OCR Master\` — writable without admin rights, safe across upgrades
+- Includes a full uninstaller (via Windows Settings → Apps); on uninstall it asks whether to keep or delete your data
 
-> **Note:** user data (`templates/`, `ocr_master.db`, `batch_import/`, etc.) lives
-> next to `OCRMaster.exe` inside `Program Files\OCRMaster` and is **not** removed on uninstall.
+> Tesseract auto-install requires Windows 10 (1809+) or Windows 11.
+> Older systems: choose "Install manually" — the installer opens the download page for you.
+
+See [docs/Windows_Install_Instructions.md](docs/Windows_Install_Instructions.md) to build `OCRMasterSetup.exe` from source.
+
+---
+
+## Windows — Build the installer from source
+
+### Prerequisites (build machine only)
+
+| Tool | Where | Notes |
+|---|---|---|
+| **Python 3.11+** | https://www.python.org/downloads/ | Check "Add Python to PATH" |
+| **Inno Setup 6** | https://jrsoftware.org/isinfo.php | Free; creates the installer EXE |
+
+Tesseract is **not** needed on the build machine — the installer handles it for end users.
+
+### One command
+
+Double-click `build\build_windows.bat`, or from a terminal:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File build\build_windows.ps1
+```
+
+This automatically:
+1. Installs all Python dependencies
+2. Runs PyInstaller → `dist\OCRMaster\OCRMaster.exe`
+3. Compiles Inno Setup → `build\Output\OCRMasterSetup.exe`
+
+Test `dist\OCRMaster\OCRMaster.exe` first, then distribute `build\Output\OCRMasterSetup.exe`.
+
+---
+
+## Linux / macOS — Run from source
+
+```bash
+# Install system dependency
+sudo apt-get install -y tesseract-ocr   # Debian/Ubuntu
+brew install tesseract                   # macOS
+
+# Install Python packages
+pip install -r requirements.txt
+
+# Run
+python3 app.py
+# or
+./run_in_linux.sh
+```
+
+---
 
 ## Workflow
 
 1. **Template Builder** — open a sample statement image, draw boxes over each field column, name them, set Repeat/Sub-group flags as needed, and save the template
-2. **Extract** (single run) — add files manually, choose the template, click *Run OCR*; right-click or press Delete to remove files from the list; review and edit the extracted table inline; save to database or export CSV
-3. **Batch** (folder run) — drop all statement files into `batch_import/`, select the template, optionally edit the batch name, click *Start Batch*; each file is processed and moved to `batch_complete/` automatically; all rows share one batch name
+2. **Extract** (single run) — add files, choose the template, click *Run OCR*; review and edit the extracted table inline; save to database or export CSV
+3. **Batch** (folder run) — drop all statement files into `batch_import/`, select the template, optionally edit the batch name, click *Start Batch*; each file is processed and moved to `batch_complete/` automatically
 4. **History** — filter by date, template, or keyword; continue editing rows; delete batches when no longer needed
+
+---
+
+## User data locations
+
+| Mode | Location |
+|---|---|
+| Installed (Windows) | `%APPDATA%\OCR Master\` |
+| Development | repo root |
+
+Contents: `templates/` (JSON), `ocr_master.db` (SQLite), `config.json` (Tesseract path), `input_files/`, `output/`
+
+---
 
 ## Security
 
 - Runs entirely on your local machine — no network connections made
 - No data sent to any external service, cloud, or AI
 - PDFs and images processed in memory only
-- SQLite database file stays on your machine at `ocr_master.db`
+- SQLite database file stays on your machine
+
+---
 
 ## Supported File Types
 

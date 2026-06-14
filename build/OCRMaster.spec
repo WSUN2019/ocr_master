@@ -34,6 +34,8 @@ a = Analysis(
     datas=[
         # Ship the docs folder (readme images etc.) — no user data
         (str(ROOT / 'docs'), 'docs'),
+        # Ship sample statement images so first-time users can try the app
+        (str(ROOT / 'input_files' / 'Examples'), 'input_files/Examples'),
     ],
     hiddenimports=[
         # PyQt6 platform plugin loaded at runtime
@@ -43,6 +45,11 @@ a = Analysis(
         'PyQt6.sip',
         # pytesseract uses subprocess; make sure it's included
         'pytesseract',
+        # pdfplumber — imported at module level in batch/extract widgets
+        'pdfplumber',
+        'pdfminer',
+        'pdfminer.high_level',
+        'pdfminer.layout',
         # pandas optional backends
         'pandas',
         'pandas._libs.tslibs.np_datetime',
@@ -54,7 +61,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['tkinter', 'matplotlib', 'scipy', 'notebook'],
+    excludes=['tkinter', 'matplotlib', 'scipy', 'notebook', 'pyarrow'],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,

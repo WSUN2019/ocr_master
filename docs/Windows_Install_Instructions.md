@@ -2,17 +2,19 @@
 
 ## Overview
 
-These steps produce a double-click installer (`OCRMasterSetup.exe`) that your customer runs once. The app then appears in Start Menu / Desktop with no terminal required.
+These steps produce a double-click installer (`OCRMasterSetup.exe`) that handles everything:
+installs the app, offers to install Tesseract automatically, and creates Start Menu / Desktop shortcuts.
 
 ---
 
-## Prerequisites (one-time setup on a Windows machine)
+## Prerequisites (one-time, on the build machine)
 
 | Tool | Where to get it | Notes |
 |------|----------------|-------|
 | **Python 3.11+** | https://www.python.org/downloads/ | Check "Add Python to PATH" during install |
-| **Tesseract OCR** | https://github.com/UB-Mannheim/tesseract/wiki | Download `tesseract-ocr-w64-setup-*.exe`; check "Add to PATH" |
-| **Inno Setup** | https://jrsoftware.org/isinfo.php | Free; used to create the installer EXE |
+| **Inno Setup 6** | https://jrsoftware.org/isinfo.php | Free; creates the installer EXE |
+
+> Tesseract does **not** need to be on the build machine — the installer handles it for end users.
 
 ---
 
@@ -27,64 +29,79 @@ cd ocr_master
 
 ### 2 — Run the build script
 
-**Easiest:** double-click `build\build_windows.bat` — it launches PowerShell automatically.
-
-Or right-click `build\build_windows.ps1` → **Run with PowerShell**
+**Easiest:** double-click `build\build_windows.bat`
 
 Or from a terminal:
 ```powershell
 powershell -ExecutionPolicy Bypass -File build\build_windows.ps1
 ```
 
-This script:
-- Changes to the repo root automatically (works regardless of where it is launched from)
-- Installs all Python dependencies (`requirements.txt` + `pyinstaller`)
-- Runs PyInstaller using `build\OCRMaster.spec`
-- Outputs a self-contained folder at `dist\OCRMaster\`
+The script:
+- Installs Python dependencies (`requirements.txt` + `pyinstaller`)
+- Runs PyInstaller → produces `dist\OCRMaster\OCRMaster.exe`
+- **Automatically compiles the Inno Setup installer** if `iscc` is found in PATH
+  or at the default Inno Setup install location
+- Output: `build\Output\OCRMasterSetup.exe`
 
-### 3 — Test the raw executable (optional)
+If Inno Setup is not found, the script prints instructions for the manual compile step.
+
+### 3 — Test the raw executable (recommended)
 
 ```bat
 dist\OCRMaster\OCRMaster.exe
 ```
 
-The app should open with no console window. Verify OCR works on a sample file before packaging.
+Verify the app opens and OCR works on a sample file before distributing.
 
-### 4 — Build the installer
+### 4 — Distribute
 
-1. Open **Inno Setup Compiler** (installed in step above)
-2. File → Open → browse to `build\installer.iss`
-3. Press **F9** (or Build → Compile)
-4. Output: `build\Output\OCRMasterSetup.exe`
-
-### 5 — Distribute
-
-Send `OCRMasterSetup.exe` to the customer. That single file is the full installer.
+Send `build\Output\OCRMasterSetup.exe` to end users. That single file is the complete installer.
 
 ---
 
 ## What the Installer Does
 
-- Installs to `C:\Program Files\OCRMaster\`
-- Creates a Start Menu shortcut
-- Optionally creates a Desktop shortcut (user choice during install)
-- Detects if Tesseract is missing → offers to open the download page automatically
-- Includes an uninstaller (visible in Windows "Add or Remove Programs")
+### Install flow
+
+1. Chooses install directory: `C:\Program Files\OCR Master\`
+2. If Tesseract is **not** installed, shows a choice page:
+   - **Install automatically** — runs `winget install UB-Mannheim.TesseractOCR` silently
+   - **Install manually** — opens the Tesseract download page in a browser
+3. Copies the app to `C:\Program Files\OCR Master\`
+4. Creates user data folder at `%APPDATA%\OCR Master\` (templates, DB, config)
+5. Creates Start Menu shortcut + optional Desktop shortcut
+6. Checks for Visual C++ Redistributable; offers download if missing
+7. Offers to launch the app immediately
+
+### User data location
+
+All user-generated data lives in `%APPDATA%\OCR Master\` (not Program Files):
+
+| Folder / File | Contents |
+|--------------|----------|
+| `templates\` | Saved bank statement templates (JSON) |
+| `ocr_master.db` | Transaction history (SQLite) |
+| `config.json` | Tesseract path override |
+| `input_files\` | Import folder |
+| `output\` | CSV exports |
+
+This means user data is **not removed on uninstall** unless the user explicitly chooses to delete it.
+
+### Uninstall
+
+Uninstall via Windows **Settings → Apps** or **Control Panel → Programs**.
+
+On uninstall, the installer asks:
+- **YES** — delete `%APPDATA%\OCR Master\` (removes templates, history, settings)
+- **NO** — keep data (safe for reinstalling later or upgrading)
 
 ---
 
 ## Important Notes
 
-- **User data** (`templates/`, `ocr_master.db`, `batch_import/`, `batch_complete/`) is stored
-  **next to** `OCRMaster.exe` inside `Program Files\OCRMaster\` — it is **not** removed on
-  uninstall, so customer data is safe across upgrades.
-
-- **App icon:** To add a custom icon, place `icon.ico` in the `build/` folder, then uncomment
-  the `icon=` line in `build\OCRMaster.spec` before running the build script.
-
-- **64-bit only:** The installer targets 64-bit Windows. This matches Tesseract's `w64` build.
-
-- **PyInstaller must run on Windows** — you cannot cross-compile from macOS/Linux.
+- **64-bit Windows only** — matches Tesseract's `w64` build and Python 3.11+
+- **Tesseract auto-install requires winget** — available on Windows 10 1809+ and all Windows 11. Older systems should use the manual option.
+- **App icon:** Place `icon.ico` in the `build/` folder, then uncomment the `icon=` line in `build\OCRMaster.spec`
 
 ---
 
@@ -92,8 +109,8 @@ Send `OCRMasterSetup.exe` to the customer. That single file is the full installe
 
 | File | Purpose |
 |------|---------|
-| `build\build_windows.bat` | Double-click launcher — calls the PS1 script automatically |
-| `build\build_windows.ps1` | One-command build: installs deps + runs PyInstaller |
-| `build\OCRMaster.spec` | PyInstaller spec (entry point, hidden imports, excludes) |
-| `build\installer.iss` | Inno Setup script — produces `OCRMasterSetup.exe` |
-| `core\app_paths.py` | Path resolver — ensures data dirs work both frozen and in dev |
+| `build\build_windows.bat` | Double-click launcher — calls the PS1 script |
+| `build\build_windows.ps1` | Full build: deps → PyInstaller → Inno Setup |
+| `build\OCRMaster.spec` | PyInstaller configuration |
+| `build\installer.iss` | Inno Setup script → produces `OCRMasterSetup.exe` |
+| `core\app_paths.py` | Path resolver — dev uses repo root, frozen uses `%APPDATA%\OCR Master` |
