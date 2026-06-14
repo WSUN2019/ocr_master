@@ -45,58 +45,62 @@ class TemplateBuilderWidget(QWidget):
 
     def _setup_ui(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(16, 16, 16, 16)
-        root.setSpacing(10)
+        root.setContentsMargins(12, 8, 12, 8)
+        root.setSpacing(6)
 
-        # ── Title row ─────────────────────────────────────────────────────────
-        title_row = QHBoxLayout()
+        # ── Single header row: title | template controls | open/fit ──────────
+        header = QHBoxLayout()
+        header.setSpacing(8)
+
         lbl = QLabel("Template Builder")
         lbl.setObjectName("section_title")
-        lbl.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
-        title_row.addWidget(lbl)
-        title_row.addStretch()
+        lbl.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        header.addWidget(lbl)
 
-        btn_open = QPushButton("Open Image / PDF")
-        btn_open.setObjectName("btn_primary")
-        btn_open.clicked.connect(self._open_file)
-        title_row.addWidget(btn_open)
+        header.addSpacing(12)
+        header.addWidget(QLabel("Template:"))
 
-        btn_fit = QPushButton("Fit Image")
-        btn_fit.clicked.connect(lambda: self._canvas.fit_image())
-        btn_fit.setToolTip("Reset zoom so the full image fits in the canvas")
-        title_row.addWidget(btn_fit)
-
-        root.addLayout(title_row)
-
-        # ── Template bar: editable combo + Save + New + Delete ───────────────
-        # The combo IS the name field — type to name a new template or pick an
-        # existing one from the list. Save always uses whatever text is shown.
-        tpl_row = QHBoxLayout()
-        tpl_row.addWidget(QLabel("Template:"))
         self._tpl_combo = QComboBox()
         self._tpl_combo.setEditable(True)
         self._tpl_combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         self._tpl_combo.lineEdit().setPlaceholderText("Select or type a template name…")
-        self._tpl_combo.setMinimumWidth(260)
+        self._tpl_combo.setMinimumWidth(220)
         self._tpl_combo.currentIndexChanged.connect(self._load_selected_template)
-        tpl_row.addWidget(self._tpl_combo)
+        header.addWidget(self._tpl_combo)
 
         btn_save = QPushButton("Save")
         btn_save.setObjectName("btn_primary")
         btn_save.clicked.connect(self._save_template)
-        tpl_row.addWidget(btn_save)
+        header.addWidget(btn_save)
 
         btn_new = QPushButton("New")
         btn_new.clicked.connect(self._new_template)
-        tpl_row.addWidget(btn_new)
+        header.addWidget(btn_new)
 
         btn_del = QPushButton("Delete")
         btn_del.setObjectName("btn_danger")
         btn_del.clicked.connect(self._delete_template)
-        tpl_row.addWidget(btn_del)
+        header.addWidget(btn_del)
 
-        tpl_row.addStretch()
-        root.addLayout(tpl_row)
+        header.addStretch()
+
+        self._save_info_lbl = QLabel("")
+        self._save_info_lbl.setStyleSheet("color: #2563eb; font-size: 11px;")
+        header.addWidget(self._save_info_lbl)
+
+        header.addSpacing(12)
+
+        btn_open = QPushButton("Open Image / PDF")
+        btn_open.setObjectName("btn_primary")
+        btn_open.clicked.connect(self._open_file)
+        header.addWidget(btn_open)
+
+        btn_fit = QPushButton("Fit Image")
+        btn_fit.clicked.connect(lambda: self._canvas.fit_image())
+        btn_fit.setToolTip("Reset zoom so the full image fits in the canvas")
+        header.addWidget(btn_fit)
+
+        root.addLayout(header)
 
         # ── Main splitter: canvas | right panel ───────────────────────────────
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -107,6 +111,7 @@ class TemplateBuilderWidget(QWidget):
         self._canvas.box_drawn.connect(self._on_box_drawn)
         self._canvas.box_removed.connect(self._on_box_removed)
         self._canvas.box_selected.connect(self._on_canvas_box_selected)
+        self._canvas.boxes_changed.connect(self._refresh_field_list)
         splitter.addWidget(self._canvas)
 
         # Right panel — fixed width, scrollable when app is resized small
@@ -257,6 +262,31 @@ class TemplateBuilderWidget(QWidget):
         splitter.setCollapsible(1, False)
         root.addWidget(splitter)
 
+    # ── Keyboard shortcuts (Ctrl+Z/Y for undo/redo) ───────────────────────────
+
+    def keyPressEvent(self, event):
+        from PyQt6.QtWidgets import QApplication, QLineEdit, QSpinBox, QDoubleSpinBox
+        focused = QApplication.focusWidget()
+        is_text = isinstance(focused, (QLineEdit, QSpinBox, QDoubleSpinBox))
+        ctrl  = event.modifiers() & Qt.KeyboardModifier.ControlModifier
+        shift = event.modifiers() & Qt.KeyboardModifier.ShiftModifier
+        if ctrl and not is_text:
+            if event.key() == Qt.Key.Key_Z:
+                if shift:
+                    self._canvas.redo()
+                    self.status_message.emit("Redo")
+                else:
+                    self._canvas.undo()
+                    self.status_message.emit("Undo")
+                event.accept()
+                return
+            if event.key() == Qt.Key.Key_Y:
+                self._canvas.redo()
+                self.status_message.emit("Redo")
+                event.accept()
+                return
+        super().keyPressEvent(event)
+
     # ── File open ─────────────────────────────────────────────────────────────
 
     def _open_file(self, path: str = ""):
@@ -304,6 +334,7 @@ class TemplateBuilderWidget(QWidget):
                     f"A field named '{name}' already exists.\n"
                     "Each field name must be unique.")
                 return
+            self._canvas.push_undo()
             self._canvas.add_named_box(
                 rect, name,
                 repeat=dlg.repeat(),
@@ -318,6 +349,7 @@ class TemplateBuilderWidget(QWidget):
         self._refresh_field_list()
 
     def _remove_selected(self):
+        self._canvas.push_undo()
         self._canvas.remove_selected_box()
         self._refresh_field_list()
 
@@ -356,6 +388,7 @@ class TemplateBuilderWidget(QWidget):
         index = self._field_list.currentRow()
         if index < 0:
             return
+        self._canvas.push_undo()
         self._canvas.set_box_repeat(index, bool(state))
         if state:
             for cb in (self._subgroup_check, self._group_anchor_check, self._concat_check):
@@ -368,6 +401,7 @@ class TemplateBuilderWidget(QWidget):
         index = self._field_list.currentRow()
         if index < 0:
             return
+        self._canvas.push_undo()
         self._canvas.set_box_sub_group(index, bool(state))
         if state:
             for cb in (self._repeat_check, self._group_anchor_check, self._concat_check):
@@ -380,6 +414,7 @@ class TemplateBuilderWidget(QWidget):
         index = self._field_list.currentRow()
         if index < 0:
             return
+        self._canvas.push_undo()
         self._canvas.set_box_group_anchor(index, bool(state))
         if state:
             for cb in (self._repeat_check, self._subgroup_check, self._concat_check):
@@ -392,6 +427,7 @@ class TemplateBuilderWidget(QWidget):
         index = self._field_list.currentRow()
         if index < 0:
             return
+        self._canvas.push_undo()
         self._canvas.set_box_concat_in_group(index, bool(state))
         if state:
             for cb in (self._repeat_check, self._subgroup_check, self._group_anchor_check):
@@ -624,8 +660,12 @@ class TemplateBuilderWidget(QWidget):
             self._tpl_combo.setCurrentIndex(idx)
         self._tpl_combo.blockSignals(False)
 
-        self.status_message.emit(f"Saved template '{name}'")
-        QMessageBox.information(self, "Saved", f"Template '{name}' saved with {len(fields)} field(s).")
+        from core.config import get_config
+        saved_path = Path(get_config().templates_dir) / f"{slug}.json"
+        self._save_info_lbl.setText(f"Saved: {saved_path}")
+        self.status_message.emit(f"Saved: {saved_path}")
+        QMessageBox.information(self, "Saved",
+            f"Template '{name}' saved with {len(fields)} field(s).\n\n{saved_path}")
 
 
 # ── Field name dialog ─────────────────────────────────────────────────────────

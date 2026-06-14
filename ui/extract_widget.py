@@ -178,10 +178,6 @@ class ExtractWidget(QWidget):
         title.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
         title_row.addWidget(title)
         title_row.addStretch()
-        btn_new = QPushButton("New Extract")
-        btn_new.setToolTip("Clear files and results to start a fresh extraction")
-        btn_new.clicked.connect(self._new_extract)
-        title_row.addWidget(btn_new)
         root.addLayout(title_row)
 
         # ── Top controls ──────────────────────────────────────────────────────
@@ -202,8 +198,14 @@ class ExtractWidget(QWidget):
         ctrl_layout.addWidget(btn_add)
 
         btn_clear_files = QPushButton("Clear Files")
+        btn_clear_files.setObjectName("btn_danger")
         btn_clear_files.clicked.connect(self._clear_files)
         ctrl_layout.addWidget(btn_clear_files)
+
+        btn_new = QPushButton("New Extract")
+        btn_new.setToolTip("Clear files and results to start a fresh extraction")
+        btn_new.clicked.connect(self._new_extract)
+        ctrl_layout.addWidget(btn_new)
 
         ctrl_layout.addStretch()
 
@@ -516,5 +518,9 @@ class ExtractWidget(QWidget):
             total += insert_transactions(
                 rows, source_file="unknown", batch_name=batch_name, template_name=tpl_name
             )
-        self.status_message.emit(f"Saved {total} rows to database")
-        QMessageBox.information(self, "Saved", f"Saved {total} rows to database.")
+        from core.config import get_config
+        db_path = get_config().db_path
+        self._status_lbl.setText(f"Saved {total} rows → {db_path}")
+        self.status_message.emit(f"Saved {total} rows → {db_path}")
+        QMessageBox.information(self, "Saved",
+            f"Saved {total} rows to database.\n\n{db_path}")

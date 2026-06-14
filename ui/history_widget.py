@@ -293,7 +293,7 @@ class HistoryWidget(QWidget):
         root.setContentsMargins(16, 16, 16, 16)
         root.setSpacing(10)
 
-        title = QLabel("Transaction History")
+        title = QLabel("Transaction Report")
         title.setObjectName("section_title")
         title.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
         root.addWidget(title)

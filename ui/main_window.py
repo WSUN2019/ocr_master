@@ -12,6 +12,7 @@ from ui.template_builder import TemplateBuilderWidget
 from ui.extract_widget import ExtractWidget
 from ui.batch_widget import BatchWidget
 from ui.history_widget import HistoryWidget
+from ui.database_widget import DatabaseWidget
 from ui.settings_widget import SettingsWidget
 from ui.help_widget import HelpWidget
 from ui.about_widget import AboutWidget
@@ -60,7 +61,8 @@ class MainWindow(QMainWindow):
             ("  \U0001f5fa  Template Builder", "Map fields on a sample image"),
             ("  \U0001f4c4  Extract",           "Run OCR on statements"),
             ("  \U0001f4e6  Batch",             "Process a folder of files"),
-            ("  \U0001f4ca  History",           "Browse extracted data"),
+            ("  \U0001f4ca  Report",            "Browse extracted data"),
+            ("  \U0001f5c4  Database",          "Browse tables, fix imports, housekeeping"),
             ("  ⚙️  Settings",        "Templates & database"),
             ("  ❓  How to Use",      "Workflow guide & diagram"),
             ("  ℹ️  About",           "About OCR Master"),
@@ -86,13 +88,15 @@ class MainWindow(QMainWindow):
         self._extract_widget   = ExtractWidget()
         self._batch_widget     = BatchWidget()
         self._history_widget   = HistoryWidget()
+        self._database_widget  = DatabaseWidget()
         self._settings_widget  = SettingsWidget()
         self._help_widget      = HelpWidget()
         self._about_widget     = AboutWidget()
 
         for w in [self._template_builder, self._extract_widget,
                   self._batch_widget, self._history_widget,
-                  self._settings_widget, self._help_widget, self._about_widget]:
+                  self._database_widget, self._settings_widget,
+                  self._help_widget, self._about_widget]:
             self._stack.addWidget(w)
 
         root_layout.addWidget(self._stack)
@@ -109,7 +113,8 @@ class MainWindow(QMainWindow):
         self._navigate(0)
 
         for w in [self._template_builder, self._extract_widget,
-                  self._batch_widget, self._history_widget, self._settings_widget]:
+                  self._batch_widget, self._history_widget,
+                  self._database_widget, self._settings_widget]:
             if hasattr(w, "status_message"):
                 w.status_message.connect(self.status.showMessage)
 

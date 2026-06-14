@@ -262,17 +262,75 @@ def query_import_log() -> pd.DataFrame:
 def delete_by_batch(batch_name: str) -> int:
     init_db()
     with _conn() as con:
+        # Collect source_files before deleting so we can clean import_log
+        rows = con.execute(
+            "SELECT DISTINCT source_file FROM transactions "
+            "WHERE batch_name = ? OR (batch_name IS NULL AND source_file = ?)",
+            (batch_name, batch_name),
+        ).fetchall()
+        source_files = [r[0] for r in rows if r[0]]
+
         cur = con.execute(
             "DELETE FROM transactions WHERE batch_name = ? OR (batch_name IS NULL AND source_file = ?)",
             (batch_name, batch_name),
         )
-        return cur.rowcount
+        deleted = cur.rowcount
+
+        # Remove import_log entries for source files that no longer have any transactions
+        for sf in source_files:
+            remaining = con.execute(
+                "SELECT COUNT(*) FROM transactions WHERE source_file = ?", (sf,)
+            ).fetchone()[0]
+            if remaining == 0:
+                con.execute("DELETE FROM import_log WHERE filename = ?", (sf,))
+
+        return deleted
 
 
 def delete_by_source(source_file: str) -> int:
     init_db()
     with _conn() as con:
         cur = con.execute("DELETE FROM transactions WHERE source_file = ?", (source_file,))
+        return cur.rowcount
+
+
+def list_tables() -> list[tuple[str, int]]:
+    """Return [(table_name, row_count), ...] for user tables only (excludes sqlite_* internals)."""
+    init_db()
+    with _conn() as con:
+        names = [r[0] for r in con.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+        ).fetchall()]
+        return [(t, con.execute(f"SELECT COUNT(*) FROM [{t}]").fetchone()[0]) for t in names]
+
+
+def query_table(table_name: str, limit: int = 2000) -> pd.DataFrame:
+    """Read rows from any known user table (name is whitelist-validated)."""
+    init_db()
+    with _conn() as con:
+        allowed = {r[0] for r in con.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+        ).fetchall()}
+        if table_name not in allowed:
+            return pd.DataFrame()
+        cols = [r[1] for r in con.execute(f"PRAGMA table_info([{table_name}])").fetchall()]
+        order = "ORDER BY id DESC" if "id" in cols else ""
+        return pd.read_sql_query(
+            f"SELECT * FROM [{table_name}] {order} LIMIT ?",
+            con, params=(limit,)
+        )
+
+
+def delete_import_log_rows(row_ids: list[int]) -> int:
+    """Delete specific rows from import_log by id (clears duplicate-detection gate)."""
+    if not row_ids:
+        return 0
+    init_db()
+    placeholders = ",".join("?" * len(row_ids))
+    with _conn() as con:
+        cur = con.execute(
+            f"DELETE FROM import_log WHERE id IN ({placeholders})", row_ids
+        )
         return cur.rowcount
 
 

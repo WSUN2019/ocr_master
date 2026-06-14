@@ -435,35 +435,41 @@ QListWidget::item:hover {
 
 /* ── Scroll bars ────────────────────────────────────────────────────── */
 QScrollBar:vertical {
-    background: transparent;
-    width: 8px;
-    margin: 2px;
+    background: #e2e8f0;
+    width: 16px;
+    margin: 0;
+    border-radius: 8px;
 }
 
 QScrollBar::handle:vertical {
-    background: #cbd5e1;
-    border-radius: 4px;
-    min-height: 24px;
-}
-
-QScrollBar::handle:vertical:hover { background: #2563eb; }
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-
-QScrollBar:horizontal {
-    background: transparent;
-    height: 8px;
+    background: #94a3b8;
+    border-radius: 7px;
+    min-height: 36px;
     margin: 2px;
 }
 
-QScrollBar::handle:horizontal {
-    background: #cbd5e1;
-    border-radius: 4px;
-    min-width: 24px;
+QScrollBar::handle:vertical:hover   { background: #2563eb; }
+QScrollBar::handle:vertical:pressed { background: #1d4ed8; }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+
+QScrollBar:horizontal {
+    background: #e2e8f0;
+    height: 16px;
+    margin: 0;
+    border-radius: 8px;
 }
 
-QScrollBar::handle:horizontal:hover { background: #2563eb; }
+QScrollBar::handle:horizontal {
+    background: #94a3b8;
+    border-radius: 7px;
+    min-width: 36px;
+    margin: 2px;
+}
+
+QScrollBar::handle:horizontal:hover   { background: #2563eb; }
+QScrollBar::handle:horizontal:pressed { background: #1d4ed8; }
 QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
-QScrollBar::corner { background: transparent; }
+QScrollBar::corner { background: #e2e8f0; }
 
 /* ── Progress bar ───────────────────────────────────────────────────── */
 QProgressBar {

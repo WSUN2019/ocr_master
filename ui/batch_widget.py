@@ -40,22 +40,22 @@ class BatchWidget(QWidget):
 
     def _setup_ui(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(16, 16, 16, 16)
-        root.setSpacing(10)
+        root.setContentsMargins(12, 8, 12, 8)
+        root.setSpacing(6)
 
-        # Title
+        # ── Title row ─────────────────────────────────────────────────────────
+        title_row = QHBoxLayout()
         title = QLabel("Batch Processing")
         title.setObjectName("section_title")
-        title.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
-        root.addWidget(title)
-
+        title.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        title_row.addWidget(title)
         sub = QLabel(
-            "Process an entire folder of statements in one run. All files share one "
-            "batch name; each file is moved to the complete folder after saving."
+            "— process an entire folder; each file is moved to the complete folder after saving."
         )
-        sub.setWordWrap(True)
-        sub.setStyleSheet("color: #64748b; font-size: 12px; padding-bottom: 4px;")
-        root.addWidget(sub)
+        sub.setStyleSheet("color: #64748b; font-size: 11px;")
+        title_row.addWidget(sub)
+        title_row.addStretch()
+        root.addLayout(title_row)
 
         # ── Config ────────────────────────────────────────────────────────────
         cfg = QGroupBox("Batch Setup")

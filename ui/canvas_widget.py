@@ -79,6 +79,9 @@ class _ResizeHandle(QGraphicsRectItem):
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self._dragging = True
+            parent = self.parentItem()
+            if parent is not None and parent._canvas is not None:
+                parent._canvas.push_undo()
             event.accept()
         else:
             super().mousePressEvent(event)
@@ -135,13 +138,16 @@ class BoxItem(QGraphicsRectItem):
 
     def __init__(self, rect: QRectF, field_name: str = "",
                  repeat: bool = False, sub_group: bool = False,
-                 group_anchor: bool = False, concat_in_group: bool = False):
+                 group_anchor: bool = False, concat_in_group: bool = False,
+                 canvas: "CanvasWidget | None" = None):
         super().__init__(rect)
-        self.field_name      = field_name
-        self.repeat          = repeat
-        self.sub_group       = sub_group
-        self.group_anchor    = group_anchor
-        self.concat_in_group = concat_in_group
+        self._canvas             = canvas
+        self._move_undo_pushed   = False
+        self.field_name          = field_name
+        self.repeat              = repeat
+        self.sub_group           = sub_group
+        self.group_anchor        = group_anchor
+        self.concat_in_group     = concat_in_group
         self._apply_style()
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable)
@@ -218,10 +224,18 @@ class BoxItem(QGraphicsRectItem):
             h.update_pos()
 
     def itemChange(self, change, value):
+        if change == QGraphicsItem.GraphicsItemChange.ItemPositionChange:
+            if not self._move_undo_pushed and self._canvas is not None:
+                self._canvas.push_undo()
+                self._move_undo_pushed = True
         if change == QGraphicsItem.GraphicsItemChange.ItemSelectedChange:
             for h in self._handles:
                 h.setVisible(bool(value))
         return super().itemChange(change, value)
+
+    def mouseReleaseEvent(self, event):
+        super().mouseReleaseEvent(event)
+        self._move_undo_pushed = False
 
     def paint(self, painter, option, widget=None):
         super().paint(painter, option, widget)
@@ -250,6 +264,7 @@ class CanvasWidget(QGraphicsView):
     box_drawn    = pyqtSignal(QRectF)
     box_removed  = pyqtSignal(int)
     box_selected = pyqtSignal(int)   # index into _boxes list; -1 = none
+    boxes_changed = pyqtSignal()     # emitted after undo/redo restores state
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -273,6 +288,10 @@ class CanvasWidget(QGraphicsView):
         self._temp_rect: Optional[QGraphicsRectItem] = None
         self._image_loaded = False
 
+        self._undo_stack: list[list[dict]] = []
+        self._redo_stack: list[list[dict]] = []
+        self._restoring  = False
+
         self._scene.selectionChanged.connect(self._on_selection_changed)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
@@ -294,6 +313,8 @@ class CanvasWidget(QGraphicsView):
     # ── Image loading ─────────────────────────────────────────────────────────
 
     def set_image(self, img: Image.Image):
+        self._undo_stack.clear()
+        self._redo_stack.clear()
         self._scene.clear()
         self._boxes.clear()
         self._temp_rect = None
@@ -335,6 +356,8 @@ class CanvasWidget(QGraphicsView):
         self._boxes.clear()
 
     def load_boxes(self, field_defs: list[dict], img_w: float, img_h: float):
+        self._undo_stack.clear()
+        self._redo_stack.clear()
         self.clear_boxes()
         for f in field_defs:
             x0, y0, x1, y1 = f["bbox"]
@@ -348,7 +371,8 @@ class CanvasWidget(QGraphicsView):
                  repeat: bool = False, sub_group: bool = False,
                  group_anchor: bool = False, concat_in_group: bool = False) -> BoxItem:
         box = BoxItem(rect, field_name, repeat=repeat, sub_group=sub_group,
-                      group_anchor=group_anchor, concat_in_group=concat_in_group)
+                      group_anchor=group_anchor, concat_in_group=concat_in_group,
+                      canvas=self)
         self._scene.addItem(box)
         self._boxes.append(box)
         return box
@@ -400,6 +424,51 @@ class CanvasWidget(QGraphicsView):
             })
         return defs
 
+    # ── Undo / redo ───────────────────────────────────────────────────────────
+
+    def _snapshot(self) -> list[dict]:
+        return [dict(d) for d in self.get_field_defs()]
+
+    def push_undo(self):
+        if self._restoring:
+            return
+        self._undo_stack.append(self._snapshot())
+        if len(self._undo_stack) > 50:
+            self._undo_stack.pop(0)
+        self._redo_stack.clear()
+
+    def undo(self):
+        if not self._undo_stack:
+            return
+        self._redo_stack.append(self._snapshot())
+        self._restore_snapshot(self._undo_stack.pop())
+
+    def redo(self):
+        if not self._redo_stack:
+            return
+        self._undo_stack.append(self._snapshot())
+        self._restore_snapshot(self._redo_stack.pop())
+
+    def _restore_snapshot(self, state: list[dict]):
+        self._restoring = True
+        try:
+            for b in self._boxes:
+                self._scene.removeItem(b)
+            self._boxes.clear()
+            for f in state:
+                x0, y0, x1, y1 = f["bbox"]
+                self._add_box(
+                    QRectF(x0, y0, x1 - x0, y1 - y0),
+                    f["name"],
+                    repeat=f.get("repeat", False),
+                    sub_group=f.get("sub_group", False),
+                    group_anchor=f.get("group_anchor", False),
+                    concat_in_group=f.get("concat_in_group", False),
+                )
+        finally:
+            self._restoring = False
+        self.boxes_changed.emit()
+
     # ── Mouse drawing ─────────────────────────────────────────────────────────
 
     def mousePressEvent(self, event):
@@ -438,7 +507,19 @@ class CanvasWidget(QGraphicsView):
     # ── Zoom / resize ─────────────────────────────────────────────────────────
 
     def keyPressEvent(self, event):
-        if event.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
+        ctrl  = event.modifiers() & Qt.KeyboardModifier.ControlModifier
+        shift = event.modifiers() & Qt.KeyboardModifier.ShiftModifier
+        if ctrl and event.key() == Qt.Key.Key_Z:
+            if shift:
+                self.redo()
+            else:
+                self.undo()
+            event.accept()
+        elif ctrl and event.key() == Qt.Key.Key_Y:
+            self.redo()
+            event.accept()
+        elif event.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
+            self.push_undo()
             self.remove_selected_box()
         else:
             super().keyPressEvent(event)
