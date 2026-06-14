@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QGroupBox, QListWidget, QListWidgetItem, QTextEdit,
     QFileDialog, QMessageBox, QLineEdit, QFormLayout, QScrollArea,
-    QFrame
+    QFrame, QSizePolicy
 )
 
 from core.storage import vacuum_db, wipe_db, db_size_mb, init_db
@@ -117,37 +117,44 @@ class SettingsWidget(QWidget):
         self._add_path_row(form, "Batch import:",      "batch_import_dir",   is_file=False)
         self._add_path_row(form, "Batch complete:",    "batch_complete_dir", is_file=False)
 
-        outer.addLayout(form)
-
-        btn_row = QHBoxLayout()
-        btn_row.addStretch()
+        btn_widget = QWidget()
+        btn_widget.setAutoFillBackground(False)
+        btn_lay = QHBoxLayout(btn_widget)
+        btn_lay.setContentsMargins(0, 4, 0, 0)
+        btn_lay.setSpacing(6)
+        btn_lay.addStretch()
 
         btn_reset = QPushButton("Reset to Defaults")
+        btn_reset.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         btn_reset.clicked.connect(self._reset_paths)
-        btn_row.addWidget(btn_reset)
+        btn_lay.addWidget(btn_reset)
 
         btn_save = QPushButton("Save All Paths")
         btn_save.setObjectName("btn_primary")
+        btn_save.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         btn_save.clicked.connect(self._save_paths)
-        btn_row.addWidget(btn_save)
+        btn_lay.addWidget(btn_save)
 
-        outer.addLayout(btn_row)
+        form.addRow("", btn_widget)
+        outer.addLayout(form)
         return group
 
     def _add_path_row(self, form: QFormLayout, label: str, key: str,
                       is_file: bool, test_btn: bool = False):
         edit = QLineEdit()
-        edit.setMinimumWidth(340)
+        edit.setMinimumWidth(120)
+        edit.setMaximumWidth(360)
         self._path_edits[key] = edit
 
         row = QWidget()
+        row.setAutoFillBackground(False)
         lay = QHBoxLayout(row)
         lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(4)
+        lay.setSpacing(6)
         lay.addWidget(edit, 1)
 
         btn_browse = QPushButton("Browse…")
-        btn_browse.setFixedWidth(72)
+        btn_browse.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         if is_file:
             btn_browse.clicked.connect(lambda _, e=edit, k=key: self._browse_file(e, k))
         else:
@@ -156,12 +163,12 @@ class SettingsWidget(QWidget):
 
         if test_btn:
             btn_test = QPushButton("Test")
-            btn_test.setFixedWidth(48)
+            btn_test.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
             btn_test.clicked.connect(self._test_tesseract)
             lay.addWidget(btn_test)
         else:
             btn_open = QPushButton("Open")
-            btn_open.setFixedWidth(48)
+            btn_open.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
             btn_open.clicked.connect(lambda _, e=edit: self._open_in_explorer(e.text()))
             lay.addWidget(btn_open)
 
@@ -266,25 +273,31 @@ class SettingsWidget(QWidget):
         self._db_path_lbl.setWordWrap(True)
         db_layout.addWidget(self._db_path_lbl)
 
-        btn_row = QHBoxLayout()
-
+        btn_row1 = QHBoxLayout()
         btn_vacuum = QPushButton("Compact (VACUUM)")
+        btn_vacuum.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         btn_vacuum.clicked.connect(self._vacuum)
-        btn_row.addWidget(btn_vacuum)
+        btn_row1.addWidget(btn_vacuum)
 
         btn_backup = QPushButton("Backup Database + Templates…")
         btn_backup.setObjectName("btn_primary")
+        btn_backup.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         btn_backup.clicked.connect(self._backup_db)
-        btn_row.addWidget(btn_backup)
+        btn_row1.addWidget(btn_backup)
+        btn_row1.addStretch()
+        db_layout.addLayout(btn_row1)
 
+        btn_row = QHBoxLayout()
         btn_wipe = QPushButton("Delete Database Only…")
         btn_wipe.setObjectName("btn_danger")
+        btn_wipe.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         btn_wipe.setToolTip("Permanently delete every transaction and import log")
         btn_wipe.clicked.connect(self._wipe_db)
         btn_row.addWidget(btn_wipe)
 
         btn_wipe_all = QPushButton("Delete Everything (Database + Templates)…")
         btn_wipe_all.setObjectName("btn_danger")
+        btn_wipe_all.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         btn_wipe_all.setToolTip("Permanently delete all transactions AND all saved templates")
         btn_wipe_all.clicked.connect(self._wipe_all)
         btn_row.addWidget(btn_wipe_all)
@@ -388,7 +401,10 @@ class SettingsWidget(QWidget):
         )
         if reply == QMessageBox.StandardButton.Yes:
             delete_template(item.data(256))
+            self._tpl_list.blockSignals(True)
             self._refresh_templates()
+            self._tpl_list.blockSignals(False)
+            self._tpl_list.setCurrentRow(-1)
             self._tpl_detail.clear()
 
     # ── Database maintenance ──────────────────────────────────────────────────

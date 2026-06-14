@@ -157,8 +157,10 @@ class TemplateBuilderWidget(QWidget):
         btn_row = QHBoxLayout()
         btn_rm = QPushButton("Remove Selected Box")
         btn_rm.setObjectName("btn_danger")
+        btn_rm.setFixedWidth(btn_rm.fontMetrics().horizontalAdvance("Remove Selected Box") + 48)
         btn_rm.clicked.connect(self._remove_selected)
         btn_row.addWidget(btn_rm)
+        btn_row.addStretch()
         fg_layout.addLayout(btn_row)
         right_layout.addWidget(fg)
 
@@ -245,10 +247,13 @@ class TemplateBuilderWidget(QWidget):
 
         right_layout.addStretch()
 
+        right.setMaximumWidth(420)
+
         right_scroll = QScrollArea()
         right_scroll.setWidget(right)
         right_scroll.setWidgetResizable(True)
         right_scroll.setMinimumWidth(400)
+        right_scroll.setMaximumWidth(420)
         right_scroll.setFrameShape(right_scroll.Shape.NoFrame)
 
         splitter.addWidget(right_scroll)

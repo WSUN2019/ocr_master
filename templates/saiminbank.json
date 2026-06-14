@@ -9,10 +9,10 @@
       "label": "Bank Name",
       "page": 0,
       "bbox": [
-        7.25,
-        21.9,
-        305.7,
-        54.77
+        5.25,
+        19.9,
+        307.7,
+        56.77
       ],
       "repeat": true,
       "sub_group": false,
@@ -24,10 +24,10 @@
       "label": "Name",
       "page": 0,
       "bbox": [
-        6.13,
-        182.36,
-        173.63,
-        211.36
+        4.13,
+        180.36,
+        175.63,
+        213.36
       ],
       "repeat": true,
       "sub_group": false,
@@ -39,10 +39,10 @@
       "label": "Account Number",
       "page": 0,
       "bbox": [
-        751.02,
-        452.38,
-        828.3,
-        479.27
+        749.02,
+        450.38,
+        830.3,
+        481.27
       ],
       "repeat": true,
       "sub_group": false,
@@ -54,14 +54,14 @@
       "label": "Transaction Date",
       "page": 0,
       "bbox": [
-        11.27,
-        562.21,
-        99.11,
-        1061.31
+        9.27,
+        560.21,
+        101.11,
+        1063.31
       ],
       "repeat": false,
-      "sub_group": true,
-      "group_anchor": false,
+      "sub_group": false,
+      "group_anchor": true,
       "concat_in_group": false
     },
     {
@@ -69,10 +69,10 @@
       "label": "Description",
       "page": 0,
       "bbox": [
-        111.33,
-        560.84,
-        489.65,
-        1059.42
+        109.33,
+        558.84,
+        491.65,
+        1061.42
       ],
       "repeat": false,
       "sub_group": false,
@@ -84,10 +84,10 @@
       "label": "Credit",
       "page": 0,
       "bbox": [
-        697.07,
-        563.5,
-        792.11,
-        1056.59
+        695.07,
+        561.5,
+        794.11,
+        1058.59
       ],
       "repeat": false,
       "sub_group": false,
@@ -99,10 +99,10 @@
       "label": "Debit",
       "page": 0,
       "bbox": [
-        813.1,
-        562.73,
-        900.32,
-        1060.36
+        811.1,
+        560.73,
+        902.32,
+        1062.36
       ],
       "repeat": false,
       "sub_group": false,
@@ -114,10 +114,10 @@
       "label": "Balance",
       "page": 0,
       "bbox": [
-        912.15,
-        560.07,
-        991.89,
-        1064.14
+        910.15,
+        558.07,
+        993.89,
+        1066.14
       ],
       "repeat": false,
       "sub_group": false,
@@ -137,5 +137,5 @@
   "page_range": [],
   "slug": "saiminbank",
   "version": 1,
-  "created_at": "2026-06-14T13:29:07.754351"
+  "created_at": "2026-06-14T15:28:19.724984"
 }

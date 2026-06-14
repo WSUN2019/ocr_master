@@ -388,24 +388,6 @@ class HelpWidget(QWidget):
                   "so a re-run never double-processes the same file."),
         ]))
 
-        # Tech stack
-        lay.addWidget(_section("Technology", [
-            ("🔍", "<b>Tesseract OCR</b> — Open-source OCR engine (v4+). Must be "
-                  "installed separately: <code>sudo apt install tesseract-ocr</code> "
-                  "on Linux; installer available for Windows. OCR runs once per page "
-                  "using <code>--psm 11</code> (sparse text) for maximum coverage."),
-            ("📄", "<b>PyMuPDF (fitz)</b> — Renders PDF pages to 300 DPI images before "
-                  "passing to Tesseract, preserving fine print on scanned statements."),
-            ("💾", "<b>SQLite</b> — All transaction data is stored in a single local "
-                  "file (<code>ocr_master.db</code>) next to the app. No cloud, no "
-                  "network, no third-party service is involved."),
-            ("🐼", "<b>pandas</b> — Used internally for data manipulation, column "
-                  "ordering, balance math, and CSV export. Not exposed externally."),
-            ("⚡", "<b>QThread (Batch Worker)</b> — Batch processing runs in a background "
-                  "thread so the UI stays responsive during long runs. Progress updates "
-                  "and per-file log lines stream in real time."),
-        ]))
-
         lay.addStretch()
         scroll.setWidget(content)
         outer.addWidget(scroll)
