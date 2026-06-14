@@ -1,6 +1,7 @@
 # ── Financial data — never commit any of this ─────────────────────────────────
 input_files/*
 !input_files/.gitkeep
+!input_files/MDBank.png
 output/
 
 # Database
@@ -9,13 +10,14 @@ ocr_master.db
 *.db-shm
 *.db-wal
 
-# Statement files (any format) — but allow docs/ screenshots and sample template
+# Statement files (any format) — but allow docs/ screenshots and sample files
 *.pdf
 *.jpg
 *.jpeg
 *.png
 !docs/*.png
 !templates/MDBank.png
+!input_files/MDBank.png
 *.tif
 *.tiff
 
@@ -25,10 +27,8 @@ ocr_master.db
 
 # Templates (contain layout coords derived from real statements)
 templates/*
-# Allow folder anchor and sample/test template
 !templates/.gitkeep
 !templates/md_bank.json
-!templates/MDBank.png
 
 # User preferences
 config.json
