@@ -301,10 +301,18 @@ def extract_with_template(file_bytes: bytes, filename: str, template: dict) -> l
                             for k in ("amount", "balance", "withdrawal", "deposit", "total", "fee"))}
     date_fields   = {f["name"] for f in fields if "date" in f["name"].lower()}
 
-    pages    = _load_pages(file_bytes, filename)
-    all_rows = []
+    pages      = _load_pages(file_bytes, filename)
+    all_rows   = []
+    skip_pages = set(template.get("skip_pages", []))   # 1-based page numbers
+    page_range = template.get("page_range", [])         # [start, end] 1-based inclusive
 
     for page_num, img in enumerate(pages):
+        page_1based = page_num + 1
+        if page_1based in skip_pages:
+            continue
+        if len(page_range) == 2 and not (page_range[0] <= page_1based <= page_range[1]):
+            continue
+
         words = _ocr_page(img)   # single Tesseract call per page
         if strategy == "repeat_vertical":
             rows = _extract_repeat_vertical(words, fields, rd, amount_fields, date_fields, page_num)

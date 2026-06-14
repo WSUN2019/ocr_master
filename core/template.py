@@ -69,14 +69,18 @@ def build_template(
     row_detection: dict,
     source_page: int = 0,
     sample_image_path: str = "",
+    skip_pages: list[int] | None = None,
+    page_range: list[int] | None = None,
 ) -> dict:
     """
     Construct a template dict ready for save_template().
 
     fields: list of {name, label, page, bbox:[x0,y0,x1,y1] in PDF pts}
     row_detection: {strategy, anchor_field, row_height_pts, start_y_pts, end_y_pts}
+    skip_pages: 1-based page numbers to skip entirely, e.g. [1] to skip cover page
+    page_range: [start, end] inclusive 1-based, e.g. [2, 14]; [] means all pages
     """
-    return {
+    tpl = {
         "name": name,
         "page_width_pts": page_width_pts,
         "page_height_pts": page_height_pts,
@@ -84,7 +88,10 @@ def build_template(
         "fields": fields,
         "row_detection": row_detection,
         "sample_image_path": sample_image_path,
+        "skip_pages": skip_pages or [],
+        "page_range": page_range or [],
     }
+    return tpl
 
 
 def template_names() -> list[str]:

@@ -173,6 +173,39 @@ class TemplateBuilderWidget(QWidget):
 
         right_layout.addWidget(rd_group)
 
+        # Page filtering
+        pf_group = QGroupBox("Page Filtering (multi-page PDFs)")
+        pf_form = QFormLayout(pf_group)
+        pf_form.setSpacing(6)
+
+        self._skip_pages_edit = QLineEdit()
+        self._skip_pages_edit.setPlaceholderText("e.g. 1  or  1, 15")
+        self._skip_pages_edit.setToolTip(
+            "Comma-separated 1-based page numbers to skip entirely.\n"
+            "Example: '1' skips the cover page."
+        )
+        pf_form.addRow("Skip pages:", self._skip_pages_edit)
+
+        from PyQt6.QtWidgets import QSpinBox
+        range_row = QHBoxLayout()
+        range_row.setSpacing(6)
+        self._page_from = QSpinBox()
+        self._page_from.setRange(0, 9999)
+        self._page_from.setSpecialValueText("first")
+        self._page_from.setToolTip("First page to process (1-based). 0 = from the beginning.")
+        self._page_to = QSpinBox()
+        self._page_to.setRange(0, 9999)
+        self._page_to.setSpecialValueText("last")
+        self._page_to.setToolTip("Last page to process (1-based). 0 = to the end.")
+        range_row.addWidget(QLabel("From"))
+        range_row.addWidget(self._page_from)
+        range_row.addWidget(QLabel("to"))
+        range_row.addWidget(self._page_to)
+        range_row.addStretch()
+        pf_form.addRow("Page range:", range_row)
+
+        right_layout.addWidget(pf_group)
+
         # Template name + save
         save_group = QGroupBox("Save")
         save_layout = QVBoxLayout(save_group)
@@ -351,6 +384,13 @@ class TemplateBuilderWidget(QWidget):
         self._start_y.setValue(float(rd.get("start_y_pts", 0.0)))
         self._end_y.setValue(float(rd.get("end_y_pts", 800.0)))
 
+        # Page filtering
+        skip = tpl.get("skip_pages", [])
+        self._skip_pages_edit.setText(", ".join(str(p) for p in skip))
+        pr = tpl.get("page_range", [])
+        self._page_from.setValue(pr[0] if len(pr) == 2 else 0)
+        self._page_to.setValue(pr[1] if len(pr) == 2 else 0)
+
         # Always show field list from template data
         self._refresh_field_list_from_template(tpl)
 
@@ -401,6 +441,9 @@ class TemplateBuilderWidget(QWidget):
         for cb in (self._repeat_check, self._subgroup_check):
             cb.setChecked(False)
             cb.setEnabled(False)
+        self._skip_pages_edit.clear()
+        self._page_from.setValue(0)
+        self._page_to.setValue(0)
 
     def _delete_template(self):
         slug = self._tpl_combo.currentData()
@@ -439,6 +482,21 @@ class TemplateBuilderWidget(QWidget):
             "anchor_field": fields[0]["name"] if fields else "",
         }
 
+        # Parse skip_pages
+        skip_raw = self._skip_pages_edit.text().strip()
+        skip_pages = []
+        if skip_raw:
+            for tok in skip_raw.replace(",", " ").split():
+                try:
+                    skip_pages.append(int(tok))
+                except ValueError:
+                    pass
+
+        # Parse page_range
+        pf = self._page_from.value()
+        pt = self._page_to.value()
+        page_range = [pf, pt] if (pf > 0 or pt > 0) else []
+
         tpl = build_template(
             name=name,
             page_width_pts=w,
@@ -446,6 +504,8 @@ class TemplateBuilderWidget(QWidget):
             fields=fields,
             row_detection=rd,
             sample_image_path=self._source_path,
+            skip_pages=skip_pages,
+            page_range=page_range,
         )
         slug = save_template(tpl)
         self._refresh_template_list()
