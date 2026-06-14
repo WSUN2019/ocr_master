@@ -292,6 +292,7 @@ QCalendarWidget QWidget#qt_calendar_navigationbar {
 
 /* ── Checkboxes ─────────────────────────────────────────────────────── */
 QCheckBox {
+    background-color: transparent;
     color: #475569;
     spacing: 8px;
 }
