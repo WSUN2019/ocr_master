@@ -23,8 +23,9 @@ ocr_master.db
 *.xlsx
 
 # Templates (contain layout coords derived from real statements)
-templates/
-# Allow sample/test template
+templates/*
+# Allow folder anchor and sample/test template
+!templates/.gitkeep
 !templates/md_bank.json
 !templates/mdbank.png
 
