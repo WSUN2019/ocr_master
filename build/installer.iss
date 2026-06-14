@@ -33,7 +33,7 @@ SolidCompression=yes
 WizardStyle=modern
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=admin
-; Installer runs as admin but intentionally writes config to user's AppData
+; Installer runs as admin but writes user data to Documents (per-user, visible)
 UsedUserAreasWarning=no
 
 [Languages]
@@ -43,17 +43,19 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Dirs]
-; AppData dirs (db, templates, config)
-Name: "{userappdata}\{#UserDataName}"
-Name: "{userappdata}\{#UserDataName}\templates"
-; Default user data dirs (Documents\OCR Master)
+; All user data lives under Documents\OCR Master — one visible location
+Name: "{userdocs}\{#UserDataName}"
+Name: "{userdocs}\{#UserDataName}\templates"
 Name: "{userdocs}\{#UserDataName}\input_files"
+Name: "{userdocs}\{#UserDataName}\output"
+Name: "{userdocs}\{#UserDataName}\batch_import"
+Name: "{userdocs}\{#UserDataName}\batch_complete"
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-; SaiminBank example template — copy to user AppData templates folder (skip if user already has it)
-Source: "..\templates\saiminbank.json"; DestDir: "{userappdata}\{#UserDataName}\templates"; Flags: ignoreversion onlyifdoesntexist
-; SaiminBank example image — copy directly to default input folder (skip if user already has it)
+; SaiminBank example template — skip if user already has it
+Source: "..\templates\saiminbank.json"; DestDir: "{userdocs}\{#UserDataName}\templates"; Flags: ignoreversion onlyifdoesntexist
+; SaiminBank example image — skip if user already has it
 Source: "..\input_files\Examples\SaiminBank.png"; DestDir: "{userdocs}\{#UserDataName}\input_files"; Flags: ignoreversion onlyifdoesntexist
 
 [Icons]
@@ -131,28 +133,25 @@ begin
     RegQueryStringValue(HKLM, 'SOFTWARE\WOW6432Node\Microsoft\VisualStudio\14.0\VC\Runtimes\x64', 'Version', Ver);
 end;
 
-// ── Write config.json with all paths ─────────────────────────────────────────
+// ── Write config.json — everything under the user-chosen data folder ──────────
 
 procedure WriteFullConfig(TessExe: String; DataDir: String);
 var
-  ConfigPath, AppDataOCR: String;
-  EscTess, EscData, EscApp: String;
+  ConfigPath, EscTess, EscData: String;
   Lines: TArrayOfString;
 begin
-  AppDataOCR := ExpandConstant('{userappdata}\{#UserDataName}');
+  EscTess := TessExe; StringChange(EscTess, '\', '\\');
+  EscData := DataDir;  StringChange(EscData, '\', '\\');
 
-  EscApp  := AppDataOCR; StringChange(EscApp,  '\', '\\');
-  EscTess := TessExe;    StringChange(EscTess, '\', '\\');
-  EscData := DataDir;    StringChange(EscData, '\', '\\');
-
-  ConfigPath := AppDataOCR + '\config.json';
+  // config.json sits in the root of the data folder alongside db and templates
+  ConfigPath := DataDir + '\config.json';
 
   SetArrayLength(Lines, 1);
   Lines[0] :=
     '{' + #13#10 +
     '  "tesseract_path":    "' + EscTess + '",' + #13#10 +
-    '  "db_path":           "' + EscApp + '\\ocr_master.db",' + #13#10 +
-    '  "templates_dir":     "' + EscApp + '\\templates",' + #13#10 +
+    '  "db_path":           "' + EscData + '\\ocr_master.db",' + #13#10 +
+    '  "templates_dir":     "' + EscData + '\\templates",' + #13#10 +
     '  "input_dir":         "' + EscData + '\\input_files",' + #13#10 +
     '  "output_dir":        "' + EscData + '\\output",' + #13#10 +
     '  "batch_import_dir":  "' + EscData + '\\batch_import",' + #13#10 +
@@ -223,13 +222,12 @@ begin
   DataDirPage := CreateInputDirPage(
     AfterID,
     'User Data Location',
-    'Where should OCR Master store your files?',
-    'Statement imports, batch jobs, and CSV exports will be saved here.' + #13#10 +
-    'The database and templates are always stored in AppData (not changed here).' + #13#10 + #13#10 +
-    'You can change any path later in the app under Settings.',
+    'Where should OCR Master store all your files?',
+    'All data — templates, database, imports, exports, and batch files — will be' + #13#10 +
+    'saved here in one place. You can change individual paths later under Settings.',
     False, ''
   );
-  DataDirPage.Add('Data folder (input, batch, output):');
+  DataDirPage.Add('Data folder:');
   DataDirPage.Values[0] := ExpandConstant('{userdocs}\OCR Master');
 end;
 
@@ -262,7 +260,8 @@ begin
     end;
   end;
 
-  // ── Create data directories ──
+  // ── Create all data directories ──
+  ForceDirectories(DataDir + '\templates');
   ForceDirectories(DataDir + '\input_files');
   ForceDirectories(DataDir + '\output');
   ForceDirectories(DataDir + '\batch_import');
@@ -291,22 +290,22 @@ end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
-  AppDataDir: String;
+  DataDir: String;
 begin
   if CurUninstallStep = usPostUninstall then
   begin
-    AppDataDir := ExpandConstant('{userappdata}\{#UserDataName}');
-    if DirExists(AppDataDir) then
+    DataDir := ExpandConstant('{userdocs}\{#UserDataName}');
+    if DirExists(DataDir) then
     begin
       if MsgBox(
         'Would you like to delete your OCR Master data?' + #13#10 + #13#10 +
         'This includes saved templates, transaction history, and settings.' + #13#10 +
-        'Location: ' + AppDataDir + #13#10 + #13#10 +
+        'Location: ' + DataDir + #13#10 + #13#10 +
         'YES — delete all data permanently' + #13#10 +
         'NO  — keep data (safe for reinstalling later)',
         mbConfirmation, MB_YESNO) = IDYES then
       begin
-        DelTree(AppDataDir, True, True, True);
+        DelTree(DataDir, True, True, True);
       end;
     end;
   end;
