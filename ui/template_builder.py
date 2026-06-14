@@ -541,6 +541,7 @@ class TemplateBuilderWidget(QWidget):
         if reply == QMessageBox.StandardButton.Yes:
             delete_template(slug)
             self._refresh_template_list()
+            self._new_template()   # clear canvas/fields/name so deleted template can't be re-saved
             self.status_message.emit(f"Deleted template '{name}'")
 
     def _save_template(self):

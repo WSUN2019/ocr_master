@@ -399,6 +399,12 @@ class ExtractWidget(QWidget):
                 return
 
         template = load_template(slug)
+        if template is None:
+            QMessageBox.critical(self, "Template Not Found",
+                f"Template '{self._tpl_combo.currentText()}' could not be loaded.\n\n"
+                "It may have been deleted. The list will now refresh.")
+            self._refresh_templates()
+            return
         self._all_rows = []
         self._progress.setMaximum(len(paths))
         self._progress.setValue(0)
