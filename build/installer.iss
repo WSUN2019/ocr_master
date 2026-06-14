@@ -51,6 +51,8 @@ Name: "{userappdata}\{#UserDataName}\templates"
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; SaiminBank example template — copy to user AppData templates folder (skip if user already has it)
 Source: "..\templates\saiminbank.json"; DestDir: "{userappdata}\{#UserDataName}\templates"; Flags: ignoreversion onlyifdoesntexist
+; SaiminBank example image — stage in app folder so Pascal can copy it to the user-chosen data dir
+Source: "..\input_files\Examples\SaiminBank.png"; DestDir: "{app}\_examples"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#AppName}";           Filename: "{app}\{#AppExeName}"
@@ -267,7 +269,7 @@ begin
   // ── Copy SaiminBank example image to input folder (skip if already there) ──
   if not FileExists(DataDir + '\input_files\SaiminBank.png') then
     FileCopy(
-      ExpandConstant('{app}') + '\_internal\input_files\Examples\SaiminBank.png',
+      ExpandConstant('{app}') + '\_examples\SaiminBank.png',
       DataDir + '\input_files\SaiminBank.png',
       False);
 
