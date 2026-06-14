@@ -42,9 +42,13 @@ brew install tesseract
 ## Run (development)
 
 ```bash
-./run.sh
+# Linux / macOS
+./run_in_linux.sh
 # or
 python3 app.py
+
+# Windows
+run_in_windows.bat
 ```
 
 ## Windows — Build a distributable installer
