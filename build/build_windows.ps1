@@ -1,5 +1,5 @@
-# OCR Master — Windows build script
-# Run from anywhere: right-click → "Run with PowerShell"
+# OCR Master - Windows build script
+# Run from anywhere: right-click > "Run with PowerShell"
 # Or from a terminal: powershell -ExecutionPolicy Bypass -File build\build_windows.ps1
 
 # Always work from the repo root (one level above this script)
@@ -8,6 +8,18 @@ Set-Location $RepoRoot
 
 Write-Host ""
 Write-Host " === OCR Master Windows Build ===" -ForegroundColor Cyan
+Write-Host ""
+
+# Step 0: Clean previous build output
+Write-Host "[0/4] Cleaning previous build output..." -ForegroundColor Yellow
+$CleanPaths = @("dist\OCRMaster", "build\OCRMaster", "build\Output")
+foreach ($p in $CleanPaths) {
+    if (Test-Path $p) {
+        Remove-Item $p -Recurse -Force
+        Write-Host "      Removed $p"
+    }
+}
+Write-Host "      Clean done."
 Write-Host ""
 
 # Step 1: Check Python
@@ -45,9 +57,8 @@ Write-Host ""
 # Step 4: Compile installer with Inno Setup (if available)
 Write-Host "[3/4] Looking for Inno Setup compiler (iscc)..." -ForegroundColor Yellow
 
-# Common install locations for Inno Setup
 $IsccCandidates = @(
-    "iscc",   # in PATH
+    "iscc",
     "${env:LOCALAPPDATA}\Programs\Inno Setup 6\iscc.exe",
     "${env:ProgramFiles(x86)}\Inno Setup 6\iscc.exe",
     "${env:ProgramFiles}\Inno Setup 6\iscc.exe",
@@ -79,7 +90,7 @@ if ($IsccPath) {
         Write-Host "[ERROR] Inno Setup compilation failed." -ForegroundColor Red
     }
 } else {
-    Write-Host "[3/4] Inno Setup not found — skipping installer build." -ForegroundColor Yellow
+    Write-Host "[3/4] Inno Setup not found - skipping installer build." -ForegroundColor Yellow
     Write-Host ""
     Write-Host " To build the installer:"
     Write-Host "   1. Download Inno Setup free from https://jrsoftware.org/isinfo.php"

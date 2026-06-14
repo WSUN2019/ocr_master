@@ -5,3 +5,4 @@
 :: right-click "Run with PowerShell" or policy changes are needed.
 
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0build_windows.ps1"
+pause
