@@ -15,7 +15,7 @@ ocr_master.db
 *.jpeg
 *.png
 !docs/*.png
-!templates/mdbank.png
+!templates/MDBank.png
 *.tif
 *.tiff
 
@@ -28,7 +28,7 @@ templates/*
 # Allow folder anchor and sample/test template
 !templates/.gitkeep
 !templates/md_bank.json
-!templates/mdbank.png
+!templates/MDBank.png
 
 # User preferences
 config.json
