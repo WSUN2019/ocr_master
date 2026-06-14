@@ -8,12 +8,13 @@ ocr_master.db
 *.db-shm
 *.db-wal
 
-# Statement files (any format) — but allow docs/ screenshots
+# Statement files (any format) — but allow docs/ screenshots and sample template
 *.pdf
 *.jpg
 *.jpeg
 *.png
 !docs/*.png
+!templates/mdbank.png
 *.tif
 *.tiff
 
@@ -23,6 +24,9 @@ ocr_master.db
 
 # Templates (contain layout coords derived from real statements)
 templates/
+# Allow sample/test template
+!templates/mdbank.json
+!templates/mdbank.png
 
 # User preferences
 config.json
