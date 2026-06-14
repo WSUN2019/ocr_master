@@ -27,7 +27,8 @@ from core.config import get_config
 
 # ── Pandas table model (editable) ────────────────────────────────────────────
 
-_READONLY_EXTRACT  = frozenset({"balance_check"})   # computed cols — not editable
+_READONLY_EXTRACT  = frozenset({"balance_check", "#"})  # computed / display cols — not editable
+_PREFERRED_COL_ORDER = ["transaction_date", "description", "credit", "debit", "balance"]
 _BALANCE_TRIGGER   = ("balance", "debit", "credit", "amount")
 
 
@@ -447,13 +448,20 @@ class ExtractWidget(QWidget):
             return
 
         self._df = pd.DataFrame(all_rows)
-        # Put internal cols at end
-        front = [c for c in self._df.columns if not c.startswith("_")]
-        back  = [c for c in self._df.columns if c.startswith("_")]
-        self._df = self._df[front + back]
 
-        # Add balance validation column if balance/debit/credit present
+        # Build display column order:
+        #   # | preferred cols (in order) | other data cols | balance_check | _internal
+        preferred = [c for c in _PREFERRED_COL_ORDER if c in self._df.columns]
+        other     = [c for c in self._df.columns
+                     if c not in _PREFERRED_COL_ORDER and not c.startswith("_")]
+        internal  = [c for c in self._df.columns if c.startswith("_")]
+        self._df  = self._df[preferred + other + internal]
+
+        # Add balance validation column — lands after all data cols, before _internal
         display_df = _add_balance_check(self._df)
+
+        # Prepend row number so the user can always sort back to extraction order
+        display_df.insert(0, "#", range(1, len(display_df) + 1))
 
         self._model = PandasModel(display_df)
         self._table.setModel(self._model)
@@ -474,6 +482,7 @@ class ExtractWidget(QWidget):
         )
         if path:
             export_df = self._model.get_df()
+            export_df = export_df.drop(columns=[c for c in ("#",) if c in export_df.columns])
             export_df.to_csv(path, index=False)
             self.status_message.emit(f"Exported CSV: {Path(path).name}")
             QMessageBox.information(self, "Exported", f"Saved {len(export_df)} rows to:\n{path}")
@@ -484,8 +493,8 @@ class ExtractWidget(QWidget):
             return
         # Use the model's df so any inline edits are captured
         df = self._model.get_df()
-        # Drop computed columns that aren't real fields
-        df = df.drop(columns=[c for c in ("balance_check",) if c in df.columns])
+        # Drop display-only columns that aren't real fields
+        df = df.drop(columns=[c for c in ("#", "balance_check") if c in df.columns])
         if df.empty:
             QMessageBox.information(self, "Save", "No data to save yet.")
             return
