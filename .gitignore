@@ -1,5 +1,6 @@
 # ── Financial data — never commit any of this ─────────────────────────────────
-input_files/
+input_files/*
+!input_files/.gitkeep
 output/
 
 # Database
