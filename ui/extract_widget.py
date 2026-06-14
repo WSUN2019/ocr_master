@@ -208,14 +208,16 @@ class ExtractWidget(QWidget):
 
         root.addWidget(ctrl_group)
 
-        # ── Progress ──────────────────────────────────────────────────────────
+        # ── Progress (2-row compact area) ─────────────────────────────────────
         self._progress = QProgressBar()
         self._progress.setVisible(False)
         self._progress.setFormat("%v / %m files — %p%")
+        self._progress.setFixedHeight(18)
         root.addWidget(self._progress)
 
         self._status_lbl = QLabel("")
         self._status_lbl.setStyleSheet("color: #2563eb;")
+        self._status_lbl.setFixedHeight(18)
         root.addWidget(self._status_lbl)
 
         # ── Splitter: file list | table ───────────────────────────────────────
@@ -266,7 +268,7 @@ class ExtractWidget(QWidget):
         splitter.addWidget(right)
         splitter.setSizes([240, 800])
 
-        root.addWidget(splitter)
+        root.addWidget(splitter, 1)   # stretch=1 so file list + table fill all remaining height
         self._refresh_templates()
 
     # ── Template refresh ──────────────────────────────────────────────────────

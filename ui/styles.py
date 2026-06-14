@@ -445,6 +445,11 @@ QProgressBar::chunk {
     border-radius: 5px;
 }
 
+/* ── Labels — transparent so they inherit parent surface color ───────── */
+QLabel {
+    background-color: transparent;
+}
+
 /* ── Scroll area ────────────────────────────────────────────────────── */
 QScrollArea {
     background-color: #ffffff;
