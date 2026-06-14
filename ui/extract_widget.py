@@ -137,6 +137,19 @@ class PandasModel(QAbstractTableModel):
                  Qt.ItemDataRole.BackgroundRole],
             )
 
+    def sort(self, column: int, order: Qt.SortOrder = Qt.SortOrder.AscendingOrder):
+        if column < 0 or column >= len(self._df.columns):
+            return
+        self.layoutAboutToBeChanged.emit()
+        col = self._df.columns[column]
+        ascending = order == Qt.SortOrder.AscendingOrder
+        try:
+            self._df = self._df.sort_values(col, ascending=ascending, na_position="last")
+            self._df = self._df.reset_index(drop=True)
+        except Exception:
+            pass
+        self.layoutChanged.emit()
+
     def get_df(self): return self._df
 
 
