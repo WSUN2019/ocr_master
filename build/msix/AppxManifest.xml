@@ -1,13 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   MSIX Manifest for OCR Master
-  ============================
-  BEFORE SUBMITTING TO PARTNER CENTER:
-  1. Update Publisher to match your Partner Center identity exactly.
-     Go to: Partner Center -> Your app -> App identity -> Package/Identity/Publisher
-     It will look like: CN=XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
-  2. Replace Assets\ placeholder images with real branded images.
-     Required sizes are listed next to each reference below.
+  Publisher identity from Partner Center (Product Identity page).
+  Replace Assets\ placeholder images with real branded images before Store submission.
 -->
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
@@ -16,14 +11,14 @@
   IgnorableNamespaces="uap rescap">
 
   <Identity
-    Name="WSUN2019.OCRMaster"
-    Publisher="CN=WSUN2019"
+    Name="WS2026.OCRMaster"
+    Publisher="CN=5173FDE3-098A-4163-8004-3AC3FD6CBE2D"
     Version="1.2.0.0"
     ProcessorArchitecture="x64" />
 
   <Properties>
     <DisplayName>OCR Master</DisplayName>
-    <PublisherDisplayName>WSUN2019</PublisherDisplayName>
+    <PublisherDisplayName>WS2026</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
     <!-- StoreLogo: 50x50 px -->
   </Properties>
@@ -47,7 +42,7 @@
       EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
         DisplayName="OCR Master"
-        Description="Fully offline bank statement extractor. No cloud, no AI APIs, no data leaves your machine."
+        Description="Bank statement extractor — proof of concept technology demonstrator. Use at your own risk."
         BackgroundColor="#1e3a5f"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png">
