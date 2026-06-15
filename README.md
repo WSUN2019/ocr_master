@@ -137,12 +137,6 @@ All 7 paths (Tesseract binary, database, templates, input, output, batch import,
 
 ---
 
-## Security & Privacy
-
-OCR Master is designed to process files locally without transmitting data externally. However, **no warranty or guarantee is made** regarding privacy or security. This is a proof-of-concept technology demonstrator — verify its behaviour in your own environment before using it with sensitive documents. Use at your own risk.
-
----
-
 ## Supported File Types
 
 | Format | Notes |

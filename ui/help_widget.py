@@ -299,8 +299,8 @@ class HelpWidget(QWidget):
         outer.addWidget(title)
 
         subtitle = QLabel(
-            "A fully offline, local tool for extracting structured transaction data "
-            "from bank statement images and PDFs. No data is sent to the internet."
+            "A tool for extracting structured transaction data from bank statement images and PDFs. "
+            "Proof of concept technology demonstrator — use at your own risk."
         )
         subtitle.setWordWrap(True)
         subtitle.setStyleSheet("color: #94a3b8; font-size: 12px; padding: 6px 0 12px 0;")

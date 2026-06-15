@@ -99,7 +99,7 @@ class AboutWidget(QWidget):
         name_lbl.setStyleSheet(f"color: {_TITLE}; background: transparent; letter-spacing: 1px;")
         root.addWidget(name_lbl)
 
-        tagline = QLabel("Offline bank statement extractor — your data never leaves this machine.")
+        tagline = QLabel("Bank statement extractor — proof of concept technology demonstrator. Use at your own risk.")
         tagline.setStyleSheet(f"color: {_MUTED}; font-size: 13px; background: transparent;")
         root.addWidget(tagline)
 
