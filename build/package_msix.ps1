@@ -53,12 +53,14 @@ Write-Host "        Found: $makeappx" -ForegroundColor Green
 # ── Step 3: Generate placeholder assets if missing ───────────────────────────
 Write-Host "[2/5] Checking assets..." -ForegroundColor Yellow
 
-$assetsDir = "build\msix\Assets"
+$assetsDir = Join-Path $RepoRoot "build\msix\Assets"
 Add-Type -AssemblyName System.Drawing
 
 function New-PlaceholderPng {
     param([string]$Path, [int]$W, [int]$H, [string]$Label)
     if (Test-Path $Path) { return }
+    $dir = Split-Path $Path -Parent
+    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
     $bmp  = New-Object System.Drawing.Bitmap($W, $H)
     $gfx  = [System.Drawing.Graphics]::FromImage($bmp)
     $gfx.Clear([System.Drawing.Color]::FromArgb(30, 58, 95))   # #1e3a5f

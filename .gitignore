@@ -48,6 +48,7 @@ build/*.pkg
 build/Output/
 build/work/
 build/OCRMaster/
+build/MSIXPackage/
 
 # Virtual environments
 .venv/
