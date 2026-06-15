@@ -9,7 +9,7 @@
 
 #define AppName      "OCR Master"
 #define AppVersion   "1.2.0"
-#define AppPublisher "WSUN2019"
+#define AppPublisher "WS2026"
 #define AppURL       "https://github.com/WSUN2019/ocr_master"
 #define AppExeName   "OCRMaster.exe"
 #define SourceDir    "..\dist\OCRMaster"
