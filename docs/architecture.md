@@ -2,7 +2,9 @@
 
 ## Overview
 
-A fully local, offline PyQt6 desktop application. No web server, no cloud, no external API calls. All processing happens on the user's machine.
+**Disclaimer:** OCR Master is a working proof of concept and technology demonstrator of AI-assisted software development. It is provided as-is with no expressed or implied warranty. Use at your own risk.
+
+A PyQt6 desktop application designed to process bank statement files locally. No web server, external API calls, or cloud services are intentionally used, though no guarantee is made as to the complete absence of network activity.
 
 ---
 

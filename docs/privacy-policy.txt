@@ -1,13 +1,16 @@
 OCR Master — Privacy Policy
 Effective date: 14 June 2026
 
-No Data Leaves Your Device. OCR Master is a fully offline desktop application. It does not connect to the internet, transmit data to any external server, or use cloud services or third-party APIs. All processing happens entirely on your local machine.
+DISCLAIMER
+OCR Master is a working proof of concept and technology demonstrator of AI-assisted software development. It is provided as-is with no expressed or implied warranty of any kind. Use at your own risk. The developer accepts no liability for any loss, data breach, or damage arising from use of this software.
 
-What the App Stores Locally. The App stores transaction records extracted from the bank statement files you supply (dates, descriptions, amounts, balances), an import log, any notes or edits you make, and app configuration settings. All data is stored in a local SQLite database on your device only, in your chosen data folder (default: Documents\OCR Master\). It is never accessed by the developer or any third party.
+About This App. OCR Master is a desktop application designed to process bank statement images and PDFs locally on your device. While the app is not intentionally designed to transmit data externally, no guarantee is made regarding the complete absence of network activity. You are responsible for verifying the app's behaviour in your environment before using it with sensitive financial documents.
 
-Bank Statement Files. PDF and image files you open are read into memory for OCR processing only and are never copied, uploaded, or retained beyond your session.
+What the App Stores Locally. The App stores transaction records extracted from the bank statement files you supply (dates, descriptions, amounts, balances), an import log, any notes or edits you make, and app configuration settings. All data is stored in a local SQLite database on your device, in your chosen data folder (default: Documents\OCR Master\).
 
-No Analytics or Crash Reporting. The App contains no analytics, telemetry, advertising SDKs, or crash-reporting services.
+Bank Statement Files. PDF and image files you open are read into memory for OCR processing. The app is not designed to copy, upload, or retain these files beyond your session.
+
+No Intentional Analytics or Crash Reporting. The App does not intentionally include analytics, telemetry, advertising SDKs, or crash-reporting services.
 
 Your Control Over Your Data. You can delete the database file, individual records, or the entire data folder at any time. The uninstaller will ask whether you wish to delete your data folder.
 

@@ -6,7 +6,15 @@
 
 ---
 
-A fully local, offline desktop application for extracting structured transaction data from bank statement images and PDFs. No cloud, no AI APIs, no data ever leaves your machine.
+> **Disclaimer — Please Read**
+>
+> OCR Master is a **working proof of concept and technology demonstrator** showcasing AI-assisted software development. It is provided as-is with **no expressed or implied warranty** of any kind. Use at your own risk.
+>
+> The app is designed to process files locally on your device, but **no guarantee is made** regarding data privacy, security, or the absence of network activity. You are responsible for verifying the app's behaviour in your environment before using it with sensitive financial documents. The developer accepts no liability for any loss, data breach, or damage arising from use of this software.
+
+---
+
+A desktop application for extracting structured transaction data from bank statement images and PDFs, designed to run locally on your machine.
 
 ## Screenshot
 
@@ -131,10 +139,7 @@ All 7 paths (Tesseract binary, database, templates, input, output, batch import,
 
 ## Security & Privacy
 
-- Runs entirely on your local machine — no network connections
-- No data sent to any external service, cloud, or AI
-- PDFs and images processed in memory; never uploaded
-- SQLite database stays on your machine
+OCR Master is designed to process files locally without transmitting data externally. However, **no warranty or guarantee is made** regarding privacy or security. This is a proof-of-concept technology demonstrator — verify its behaviour in your own environment before using it with sensitive documents. Use at your own risk.
 
 ---
 
