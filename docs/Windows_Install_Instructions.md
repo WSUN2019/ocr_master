@@ -66,22 +66,23 @@ Send `build\Output\OCRMasterSetup.exe` to end users. That single file is the com
 2. If Tesseract is **not** installed, shows a choice:
    - **Install automatically** — runs `winget install UB-Mannheim.TesseractOCR` silently
    - **Install manually** — opens the Tesseract download page in the browser
-3. **Data folder picker** — user chooses where imports, exports, and batch files are stored (default: `Documents\OCR Master\`)
+3. **Data folder picker** — user chooses where all data files are stored (default: `Documents\OCR Master\`)
 4. Copies app binaries to `C:\Program Files\OCR Master\`
-5. Creates `%APPDATA%\OCR Master\` for the database, templates, and config
-6. Writes `config.json` with all 7 paths to `%APPDATA%\OCR Master\`
-7. Creates all data subdirectories
-8. Checks for Visual C++ Redistributable; offers download if missing
-9. Creates Start Menu shortcut + optional Desktop shortcut
-10. Offers to launch the app immediately
+5. Writes `config.json` with all 7 paths to the user-selected data folder (`Documents\OCR Master\` by default)
+6. Creates all data subdirectories under the selected data folder
+7. Checks for Visual C++ Redistributable; offers download if missing
+8. Creates Start Menu shortcut + optional Desktop shortcut
+9. Offers to launch the app immediately
 
 ### User data locations (defaults)
 
+All user data lives under a single folder the user chooses during install. Default is `Documents\OCR Master\`.
+
 | Data | Location |
 |------|---------|
-| Database (`ocr_master.db`) | `%APPDATA%\OCR Master\` |
-| Templates | `%APPDATA%\OCR Master\templates\` |
-| Config (`config.json`) | `%APPDATA%\OCR Master\` |
+| Database (`ocr_master.db`) | `Documents\OCR Master\` |
+| Templates | `Documents\OCR Master\templates\` |
+| Config (`config.json`) | `Documents\OCR Master\` |
 | Input files | `Documents\OCR Master\input_files\` |
 | CSV output | `Documents\OCR Master\output\` |
 | Batch import | `Documents\OCR Master\batch_import\` |
@@ -94,10 +95,8 @@ All paths can be changed after install in **Settings → Paths & Locations**.
 Via Windows **Settings → Apps** or **Control Panel → Programs**.
 
 On uninstall, the installer asks:
-- **YES** — delete `%APPDATA%\OCR Master\` (removes templates, history, settings permanently)
+- **YES** — delete `Documents\OCR Master\` (removes database, templates, and settings permanently)
 - **NO** — keep data (safe for reinstalling or upgrading later)
-
-User files in `Documents\OCR Master\` are never deleted by the uninstaller.
 
 ---
 
@@ -117,5 +116,6 @@ User files in `Documents\OCR Master\` are never deleted by the uninstaller.
 | `build\build_windows.ps1` | Full build script: clean, deps, PyInstaller, Inno Setup |
 | `build\OCRMaster.spec` | PyInstaller configuration |
 | `build\installer.iss` | Inno Setup script |
-| `core\app_paths.py` | Resolves APP_DIR: repo root in dev, `%APPDATA%\OCR Master\` when installed |
+| `core\app_paths.py` | Resolves APP_DIR: repo root in dev, `Documents\OCR Master\` when installed |
 | `core\config.py` | Singleton config manager for all 7 configurable paths |
+| `create_dev_zip.bat` | Creates a clean dated zip of source files for sharing with another developer |

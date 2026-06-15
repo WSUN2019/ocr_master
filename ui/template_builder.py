@@ -169,6 +169,43 @@ class TemplateBuilderWidget(QWidget):
         self._concat_check.stateChanged.connect(self._on_concat_toggled)
         fg_layout.addWidget(self._concat_check)
 
+        self._currency_check = QCheckBox("Currency (2 decimal places  $)")
+        self._currency_check.setToolTip(
+            "OCR sometimes drops the decimal point and/or thousands comma.\n"
+            "Enabling this reconstructs the correct value from raw digits:\n"
+            "  '100000'  →  1000.00  (from '1,000.00')\n"
+            "  '10050'   →   100.50  (from '100.50')\n"
+            "Can be combined with any of the grouping flags above."
+        )
+        self._currency_check.setEnabled(False)
+        self._currency_check.stateChanged.connect(self._on_currency_toggled)
+        fg_layout.addWidget(self._currency_check)
+
+        date_fmt_row = QHBoxLayout()
+        date_fmt_row.setSpacing(6)
+        date_fmt_row.addWidget(QLabel("Date format:"))
+        self._date_format_combo = QComboBox()
+        self._date_format_combo.setEditable(True)
+        self._date_format_combo.lineEdit().setPlaceholderText("e.g. DD MMM YY  (blank = auto-detect)")
+        self._date_format_combo.addItems([
+            "", "DD MMM YY", "DD MMM YYYY", "DD-MMM-YYYY",
+            "DD/MM/YY", "DD/MM/YYYY", "D/M/YY", "D/M/YYYY",
+            "MM/DD/YY", "MM/DD/YYYY", "M/D/YY", "M/D/YYYY",
+            "YYYY-MM-DD",
+        ])
+        self._date_format_combo.setCurrentIndex(0)
+        self._date_format_combo.setEnabled(False)
+        self._date_format_combo.setToolTip(
+            "Tokens: DD (day 01-31), D (day 1-31), MM (month 01-12), M (month 1-12),\n"
+            "        MMM (Jan/Feb/… abbreviation), YY (2-digit year), YYYY (4-digit year)\n"
+            "Separators: - / space (OCR mismatches tolerated)\n"
+            "Leave blank to use auto-detection from common date formats."
+        )
+        self._date_format_combo.lineEdit().editingFinished.connect(self._on_date_format_changed)
+        self._date_format_combo.activated.connect(lambda _: self._on_date_format_changed())
+        date_fmt_row.addWidget(self._date_format_combo)
+        fg_layout.addLayout(date_fmt_row)
+
         btn_row = QHBoxLayout()
         btn_rm = QPushButton("Remove Selected Box")
         btn_rm.setObjectName("btn_danger")
@@ -341,6 +378,8 @@ class TemplateBuilderWidget(QWidget):
                 sub_group=dlg.sub_group(),
                 group_anchor=dlg.group_anchor(),
                 concat_in_group=dlg.concat_in_group(),
+                currency=dlg.currency(),
+                date_format=dlg.date_format(),
             )
             self._refresh_field_list()
         # If cancelled, box is discarded (not added to canvas)
@@ -374,11 +413,17 @@ class TemplateBuilderWidget(QWidget):
             (self._subgroup_check,     "sub_group"),
             (self._group_anchor_check, "group_anchor"),
             (self._concat_check,       "concat_in_group"),
+            (self._currency_check,     "currency"),
         ):
             cb.blockSignals(True)
             cb.setChecked(defs[index].get(key, False) if has else False)
             cb.setEnabled(has)
             cb.blockSignals(False)
+
+        self._date_format_combo.blockSignals(True)
+        self._date_format_combo.setCurrentText(defs[index].get("date_format", "") if has else "")
+        self._date_format_combo.setEnabled(has)
+        self._date_format_combo.blockSignals(False)
 
     # keep old name as alias so nothing else breaks
     def _sync_repeat_checkbox(self, index: int):
@@ -436,6 +481,23 @@ class TemplateBuilderWidget(QWidget):
                 cb.blockSignals(False)
         self._refresh_field_list()
 
+    def _on_currency_toggled(self, state: int):
+        index = self._field_list.currentRow()
+        if index < 0:
+            return
+        self._canvas.push_undo()
+        self._canvas.set_box_currency(index, bool(state))
+        self._refresh_field_list()
+
+    def _on_date_format_changed(self):
+        index = self._field_list.currentRow()
+        if index < 0:
+            return
+        fmt = self._date_format_combo.currentText().strip()
+        self._canvas.push_undo()
+        self._canvas.set_box_date_format(index, fmt)
+        self._refresh_field_list()
+
     def _refresh_field_list(self):
         row = self._field_list.currentRow()
         self._field_list.blockSignals(True)
@@ -452,7 +514,9 @@ class TemplateBuilderWidget(QWidget):
                 prefix = "↺ "
             else:
                 prefix = "   "
-            text = f"{prefix}{f['name']}  [{bbox[0]:.0f},{bbox[1]:.0f}  →  {bbox[2]:.0f},{bbox[3]:.0f}]"
+            suffix = "  $" if f.get("currency") else ""
+            date_note = f"  [{f['date_format']}]" if f.get("date_format") else ""
+            text = f"{prefix}{f['name']}{suffix}{date_note}  [{bbox[0]:.0f},{bbox[1]:.0f}  →  {bbox[2]:.0f},{bbox[3]:.0f}]"
             self._field_list.addItem(QListWidgetItem(text))
         self._field_list.blockSignals(False)
         if row >= 0:
@@ -571,9 +635,13 @@ class TemplateBuilderWidget(QWidget):
         self._canvas.clear_image()
         self._refresh_field_list()
         for cb in (self._repeat_check, self._subgroup_check,
-                   self._group_anchor_check, self._concat_check):
+                   self._group_anchor_check, self._concat_check, self._currency_check):
             cb.setChecked(False)
             cb.setEnabled(False)
+        self._date_format_combo.blockSignals(True)
+        self._date_format_combo.setCurrentText("")
+        self._date_format_combo.setEnabled(False)
+        self._date_format_combo.blockSignals(False)
         self._skip_pages_edit.clear()
         self._page_from.setValue(0)
         self._page_to.setValue(0)
@@ -718,7 +786,7 @@ class _FieldNameDialog(QWidget):
         )
         layout.addWidget(self._concat_chk)
 
-        # all four are mutually exclusive
+        # all four structural flags are mutually exclusive
         all_chks = [self._repeat_chk, self._subgroup_chk,
                     self._group_anchor_chk, self._concat_chk]
         for chk in all_chks:
@@ -727,6 +795,35 @@ class _FieldNameDialog(QWidget):
                 lambda on, oth=others: [c.setEnabled(not on) for c in oth] if on else
                                        [c.setEnabled(True) for c in oth]
             )
+
+        # currency is orthogonal — can be combined with any structural flag
+        self._currency_chk = QCheckBox("Currency (2 decimal places  $)")
+        self._currency_chk.setToolTip(
+            "OCR sometimes drops the decimal point and/or thousands comma.\n"
+            "Enabling this reconstructs the correct value from raw digits:\n"
+            "  '100000'  →  1000.00  (from '1,000.00')\n"
+            "  '10050'   →   100.50  (from '100.50')\n"
+            "Can be combined with any grouping flag above."
+        )
+        layout.addWidget(self._currency_chk)
+
+        layout.addWidget(QLabel("Date format (optional):"))
+        self._date_fmt_dlg = QComboBox()
+        self._date_fmt_dlg.setEditable(True)
+        self._date_fmt_dlg.lineEdit().setPlaceholderText("e.g. DD MMM YY  (blank = auto-detect)")
+        self._date_fmt_dlg.addItems([
+            "", "DD MMM YY", "DD MMM YYYY", "DD-MMM-YYYY",
+            "DD/MM/YY", "DD/MM/YYYY", "D/M/YY", "D/M/YYYY",
+            "MM/DD/YY", "MM/DD/YYYY", "M/D/YY", "M/D/YYYY",
+            "YYYY-MM-DD",
+        ])
+        self._date_fmt_dlg.setCurrentIndex(0)
+        self._date_fmt_dlg.setToolTip(
+            "Tokens: DD day (01-31), D day (1-31), MM month (01-12), M month (1-12),\n"
+            "        MMM month abbreviation (Jan/Feb/…), YY 2-digit year, YYYY 4-digit year\n"
+            "Separators: - / space (OCR mismatches are tolerated)"
+        )
+        layout.addWidget(self._date_fmt_dlg)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
@@ -752,3 +849,9 @@ class _FieldNameDialog(QWidget):
 
     def concat_in_group(self) -> bool:
         return self._concat_chk.isChecked()
+
+    def currency(self) -> bool:
+        return self._currency_chk.isChecked()
+
+    def date_format(self) -> str:
+        return self._date_fmt_dlg.currentText().strip()

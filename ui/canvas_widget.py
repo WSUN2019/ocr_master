@@ -139,6 +139,8 @@ class BoxItem(QGraphicsRectItem):
     def __init__(self, rect: QRectF, field_name: str = "",
                  repeat: bool = False, sub_group: bool = False,
                  group_anchor: bool = False, concat_in_group: bool = False,
+                 currency: bool = False,
+                 date_format: str = "",
                  canvas: "CanvasWidget | None" = None):
         super().__init__(rect)
         self._canvas             = canvas
@@ -148,6 +150,8 @@ class BoxItem(QGraphicsRectItem):
         self.sub_group           = sub_group
         self.group_anchor        = group_anchor
         self.concat_in_group     = concat_in_group
+        self.currency            = currency
+        self.date_format         = date_format
         self._apply_style()
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsMovable)
@@ -185,7 +189,9 @@ class BoxItem(QGraphicsRectItem):
             suffix = " [repeats every row]"
         else:
             suffix = ""
-        self.setToolTip(f"{self.field_name}{suffix}")
+        currency_note = " [$: 2dp currency normalisation]" if self.currency else ""
+        date_note     = f" [date format: {self.date_format}]" if self.date_format else ""
+        self.setToolTip(f"{self.field_name}{suffix}{currency_note}{date_note}")
 
     def set_repeat(self, value: bool):
         self.repeat = value
@@ -216,6 +222,16 @@ class BoxItem(QGraphicsRectItem):
         if value:
             self.repeat = self.sub_group = self.group_anchor = False
         self._apply_style()
+        self._update_tooltip()
+        self.update()
+
+    def set_currency(self, value: bool):
+        self.currency = value
+        self._update_tooltip()
+        self.update()
+
+    def set_date_format(self, value: str):
+        self.date_format = value
         self._update_tooltip()
         self.update()
 
@@ -252,6 +268,8 @@ class BoxItem(QGraphicsRectItem):
                 label = f"↺ {self.field_name}"
             else:
                 label = self.field_name
+            if self.currency:
+                label = f"{label} $"
             painter.drawText(int(r.x()) + 3, int(r.y()) + 14, label)
 
 
@@ -365,23 +383,28 @@ class CanvasWidget(QGraphicsView):
                           repeat=f.get("repeat", False),
                           sub_group=f.get("sub_group", False),
                           group_anchor=f.get("group_anchor", False),
-                          concat_in_group=f.get("concat_in_group", False))
+                          concat_in_group=f.get("concat_in_group", False),
+                          currency=f.get("currency", False),
+                          date_format=f.get("date_format", ""))
 
     def _add_box(self, rect: QRectF, field_name: str,
                  repeat: bool = False, sub_group: bool = False,
-                 group_anchor: bool = False, concat_in_group: bool = False) -> BoxItem:
+                 group_anchor: bool = False, concat_in_group: bool = False,
+                 currency: bool = False, date_format: str = "") -> BoxItem:
         box = BoxItem(rect, field_name, repeat=repeat, sub_group=sub_group,
                       group_anchor=group_anchor, concat_in_group=concat_in_group,
-                      canvas=self)
+                      currency=currency, date_format=date_format, canvas=self)
         self._scene.addItem(box)
         self._boxes.append(box)
         return box
 
     def add_named_box(self, rect: QRectF, field_name: str,
                       repeat: bool = False, sub_group: bool = False,
-                      group_anchor: bool = False, concat_in_group: bool = False):
+                      group_anchor: bool = False, concat_in_group: bool = False,
+                      currency: bool = False, date_format: str = ""):
         self._add_box(rect, field_name, repeat=repeat, sub_group=sub_group,
-                      group_anchor=group_anchor, concat_in_group=concat_in_group)
+                      group_anchor=group_anchor, concat_in_group=concat_in_group,
+                      currency=currency, date_format=date_format)
 
     def set_box_repeat(self, index: int, value: bool):
         if 0 <= index < len(self._boxes):
@@ -398,6 +421,14 @@ class CanvasWidget(QGraphicsView):
     def set_box_concat_in_group(self, index: int, value: bool):
         if 0 <= index < len(self._boxes):
             self._boxes[index].set_concat_in_group(value)
+
+    def set_box_currency(self, index: int, value: bool):
+        if 0 <= index < len(self._boxes):
+            self._boxes[index].set_currency(value)
+
+    def set_box_date_format(self, index: int, value: str):
+        if 0 <= index < len(self._boxes):
+            self._boxes[index].set_date_format(value)
 
     def remove_selected_box(self):
         for i, box in enumerate(self._boxes):
@@ -421,6 +452,8 @@ class CanvasWidget(QGraphicsView):
                 "sub_group":      box.sub_group,
                 "group_anchor":   box.group_anchor,
                 "concat_in_group":box.concat_in_group,
+                "currency":       box.currency,
+                "date_format":    box.date_format,
             })
         return defs
 
@@ -464,6 +497,8 @@ class CanvasWidget(QGraphicsView):
                     sub_group=f.get("sub_group", False),
                     group_anchor=f.get("group_anchor", False),
                     concat_in_group=f.get("concat_in_group", False),
+                    currency=f.get("currency", False),
+                    date_format=f.get("date_format", ""),
                 )
         finally:
             self._restoring = False

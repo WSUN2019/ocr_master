@@ -5,137 +5,113 @@
   "source_page": 0,
   "fields": [
     {
-      "name": "bank_name",
-      "label": "Bank Name",
-      "page": 0,
-      "bbox": [
-        5.25,
-        19.9,
-        307.7,
-        56.77
-      ],
-      "repeat": true,
-      "sub_group": false,
-      "group_anchor": false,
-      "concat_in_group": false
-    },
-    {
-      "name": "name",
-      "label": "Name",
-      "page": 0,
-      "bbox": [
-        4.13,
-        180.36,
-        175.63,
-        213.36
-      ],
-      "repeat": true,
-      "sub_group": false,
-      "group_anchor": false,
-      "concat_in_group": false
-    },
-    {
-      "name": "account_number",
-      "label": "Account Number",
-      "page": 0,
-      "bbox": [
-        749.02,
-        450.38,
-        830.3,
-        481.27
-      ],
-      "repeat": true,
-      "sub_group": false,
-      "group_anchor": false,
-      "concat_in_group": false
-    },
-    {
       "name": "transaction_date",
       "label": "Transaction Date",
       "page": 0,
       "bbox": [
-        9.27,
-        560.21,
-        101.11,
-        1063.31
+        -3.21,
+        550.47,
+        103.7,
+        1080.22
       ],
       "repeat": false,
       "sub_group": false,
       "group_anchor": true,
-      "concat_in_group": false
+      "concat_in_group": false,
+      "currency": false
     },
     {
       "name": "description",
       "label": "Description",
       "page": 0,
       "bbox": [
-        109.33,
-        558.84,
-        491.65,
-        1061.42
+        95.39,
+        552.36,
+        517.06,
+        1078.32
       ],
       "repeat": false,
       "sub_group": false,
       "group_anchor": false,
-      "concat_in_group": true
+      "concat_in_group": true,
+      "currency": false
     },
     {
       "name": "credit",
       "label": "Credit",
       "page": 0,
       "bbox": [
-        695.07,
-        561.5,
-        794.11,
-        1058.59
+        678.42,
+        553.77,
+        809.98,
+        1070.25
       ],
       "repeat": false,
       "sub_group": false,
       "group_anchor": false,
-      "concat_in_group": false
+      "concat_in_group": false,
+      "currency": true
     },
     {
       "name": "debit",
       "label": "Debit",
       "page": 0,
       "bbox": [
-        811.1,
-        560.73,
-        902.32,
-        1062.36
+        801.99,
+        554.06,
+        917.74,
+        1072.82
       ],
       "repeat": false,
       "sub_group": false,
       "group_anchor": false,
-      "concat_in_group": false
+      "concat_in_group": false,
+      "currency": true
     },
     {
       "name": "balance",
       "label": "Balance",
       "page": 0,
       "bbox": [
-        910.15,
-        558.07,
-        993.89,
-        1066.14
+        909.66,
+        559.0,
+        996.76,
+        1078.75
       ],
       "repeat": false,
       "sub_group": false,
       "group_anchor": false,
-      "concat_in_group": false
+      "concat_in_group": false,
+      "currency": true
+    },
+    {
+      "name": "bank_name",
+      "label": "Bank Name",
+      "page": 0,
+      "bbox": [
+        0.96,
+        7.91,
+        322.47,
+        63.38
+      ],
+      "repeat": true,
+      "sub_group": false,
+      "group_anchor": false,
+      "concat_in_group": false,
+      "currency": false
     }
   ],
   "row_detection": {
     "strategy": "fixed_regions",
-    "row_height_pts": 12.0,
+    "row_height_pts": 14.0,
     "start_y_pts": 0.0,
     "end_y_pts": 1132.0,
-    "anchor_field": "bank_name"
+    "anchor_field": "transaction_date"
   },
   "sample_image_path": "SaiminBank.png",
   "skip_pages": [],
   "page_range": [],
   "slug": "saiminbank",
   "version": 1,
-  "created_at": "2026-06-14T15:28:19.724984"
+  "created_at": "2026-06-14T19:57:58.116880"
 }

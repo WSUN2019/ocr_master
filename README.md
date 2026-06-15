@@ -17,17 +17,51 @@ A fully local, offline desktop application for extracting structured transaction
 ## Features
 
 - **Visual template builder** — load a sample statement image, draw bounding boxes over each field (date, description, debit, credit, balance), label and save as a named template
+- **Undo / redo** — Ctrl+Z / Ctrl+Shift+Z in the Template Builder canvas; covers add, delete, move, resize, and flag changes
 - **Multi-bank support** — create one template per bank layout; a `SaiminBank` example template is included
-- **Repeat & Sub-group fields** — mark header fields as *Repeat* (copied to every row) or *Sub-group* (fill-down for banks like RBS where date/balance appear once per row group)
+- **Field flags** — mark fields as *Repeat* (header copied to every row), *Sub-group* (fill-down for banks where date/balance appear once per group), *Group Anchor* (signals a new transaction), *Concat in group* (join multi-line descriptions), or *Currency* (reconstruct 2-decimal amounts when OCR drops the decimal point or thousands comma)
+- **Date format per field** — specify the source format (`DD MMM YY`, `DD/MM/YYYY`, `M/D/YY`, etc.) so the extractor validates day ≤ 31 and month ≤ 12; month abbreviations fuzzy-matched to handle OCR misreads; unparseable dates shown in red
 - **Tesseract OCR** — runs once per page; bounding-box crops map extracted text to fields
-- **Single-file Extract** — add files manually, review and edit the table inline before saving
+- **Single-file Extract** — add files manually, review and edit the table inline before saving; columns always ordered: `#` | date | description | credit | debit | balance | balance_check
 - **Batch Processing** — point at a folder; all files process under one batch name; each file moves to `batch_complete/` on success
 - **Balance validation** — auto-computed `balance_check` column (✓ green / ✗ red); sign convention auto-detected; reruns on every cell edit
-- **Inline editing** — double-click any cell to correct OCR errors; note column auto-stamped with before/after
+- **Inline editing** — double-click any cell to correct OCR errors; note column auto-stamped with before/after; date cells that failed to parse to ISO format are highlighted red
+- **Transaction Report** — filter by date range, template, or keyword; edit inline; delete batches; export CSV
+- **Database tab** — browse `transactions` and `import_log` tables with row counts; delete individual import_log entries to re-enable re-extraction of specific files; export any table to CSV
+- **Duplicate detection** — re-running the same file after deleting its batch now works correctly; delete batch clears both `transactions` and `import_log`
 - **Configurable paths** — all 7 data paths (Tesseract, database, templates, input, output, batch folders) are user-configurable in Settings
-- **SQLite storage** — all transactions stored locally
+- **SQLite storage** — all transactions stored locally; full raw field data preserved in JSON alongside fixed columns
 - **CSV export** — export any filtered view
-- **History & search** — query by date range, template, or keyword; delete batches
+
+---
+
+## Navigation
+
+| Page | Purpose |
+|------|---------|
+| Template Builder | Draw field boxes on a sample image, save as a reusable template |
+| Extract | Single-file or multi-file OCR extraction with inline editing |
+| Batch | Process an entire folder automatically |
+| Report | Query, filter, edit, and export saved transactions |
+| Database | Browse raw tables, inspect import log, fix duplicate detection |
+| Settings | Configure all 7 data paths and manage templates |
+
+---
+
+## Windows — Run from source (developers / testers)
+
+Double-click `setup_windows.bat`. It will:
+
+1. Check for Python 3.11 — offer to install via winget if missing
+2. Install all pip dependencies from `requirements.txt`
+3. Check for Tesseract OCR — offer to install via winget if missing
+4. Write `config.json` with the Tesseract path
+
+Then double-click `run_in_windows.bat` to launch.
+
+### Share with another developer
+
+Double-click `create_dev_zip.bat` — produces a clean dated zip of all source files (no database, no user data, no build output) that the other developer can unzip and run with the same steps above.
 
 ---
 
@@ -37,9 +71,8 @@ A fully local, offline desktop application for extracting structured transaction
 
 The installer:
 - Installs the app to `C:\Program Files\OCR Master\`
-- Offers to install Tesseract OCR automatically (via winget) or open the download page
-- Lets you choose where user files (imports, exports, batch folders) are stored — default: `Documents\OCR Master\`
-- Stores app data (templates, database, config) in `%APPDATA%\OCR Master\` — no admin rights needed for day-to-day use
+- Offers to install Tesseract OCR automatically (via winget) or opens the download page
+- Lets you choose where all user files are stored — default: `Documents\OCR Master\`
 - Creates Start Menu + optional Desktop shortcuts
 - Full uninstaller via Windows Settings → Apps; on uninstall asks whether to keep or delete your data
 
@@ -80,19 +113,19 @@ python3 app.py
 1. **Template Builder** — open a sample statement image, draw boxes over each column, name and configure fields, save the template
 2. **Extract** — add files, pick the template, run OCR, review and edit inline, save to database or export CSV
 3. **Batch** — drop files into the import folder, pick the template, click *Start Batch*; files are processed and moved automatically
-4. **History** — filter, search, edit, and export saved transactions
+4. **Report** — filter, search, edit, and export saved transactions
+5. **Database** — inspect raw table contents; delete import_log entries if a file needs to be re-extracted
 
 ---
 
-## User data locations (default, all configurable in Settings)
+## User data locations (all configurable in Settings)
 
-| Data | Default location |
-|------|-----------------|
-| Database + templates + config | `%APPDATA%\OCR Master\` |
-| Input files, output, batch folders | `Documents\OCR Master\` |
-| Development (running from source) | Repo root |
+| Mode | All user data |
+|------|--------------|
+| Installed (`.exe`) | `Documents\OCR Master\` |
+| Development (`python app.py`) | Repo root |
 
-All paths can be changed under **Settings → Paths & Locations** without restarting the app.
+All 7 paths (Tesseract binary, database, templates, input, output, batch import, batch complete) default to subdirectories under `Documents\OCR Master\` in the installed build and can be changed under **Settings → Paths & Locations** without restarting the app.
 
 ---
 

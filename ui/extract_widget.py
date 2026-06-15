@@ -5,6 +5,8 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import re
+
 import pandas as pd
 from PyQt6.QtCore import Qt, QAbstractTableModel, QModelIndex, pyqtSignal
 from PyQt6.QtGui import QFont, QColor
@@ -63,6 +65,12 @@ class PandasModel(QAbstractTableModel):
                 if text.startswith("✓"): return QColor(16, 185, 129, 30)
                 if text.startswith("✗"): return QColor(239, 68,  68,  30)
             return None
+
+        if role == Qt.ItemDataRole.ForegroundRole:
+            if "date" in col.lower() and not col.startswith("_"):
+                if not pd.isna(val) and str(val).strip():
+                    if not re.match(r'^\d{4}-\d{2}-\d{2}$', str(val).strip()):
+                        return QColor("#ef4444")
 
         if role == Qt.ItemDataRole.BackgroundRole:
             note = self._df["note"].iloc[index.row()]

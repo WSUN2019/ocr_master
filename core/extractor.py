@@ -2,6 +2,13 @@
 Extract structured rows from bank statement images (JPG/PNG) or scanned PDFs
 using Tesseract OCR on bounding-box crops defined by a saved template.
 
+Currency normalisation: fields flagged "currency" assume exactly 2 decimal
+places in the source document.  When OCR drops the period (and/or thousands
+comma), the raw digits are reconstructed correctly:
+  "100000"  <- "1,000.00"  (both comma and period dropped)
+  "10050"   <- "100.50"    (period dropped)
+  "1000.00" <- "1,000.00"  (comma dropped, period kept) — already correct
+
 Two extraction strategies:
   fixed_regions   — user drew tall column boxes; OCR each column, split by line,
                     zip columns into rows. Best for most bank statements.
@@ -13,6 +20,7 @@ word-level bounding boxes. Fields are populated by filtering those words into
 each template region — no per-field subprocess overhead.
 """
 import io
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -67,12 +75,148 @@ def _clean(text: Optional[str]) -> str:
     return " ".join(text.split())
 
 
+_MONTH_ABBREVS: dict[str, int] = {
+    "JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6,
+    "JUL": 7, "AUG": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DEC": 12,
+}
+
+
+def _closest_month(s: str) -> Optional[int]:
+    """Match an OCR'd 3-ish-letter string to a month number.
+    Requires at least 2 of 3 leading characters to agree."""
+    s3 = s.upper().strip()[:3]
+    if s3 in _MONTH_ABBREVS:
+        return _MONTH_ABBREVS[s3]
+    best_num, best_score = None, -1
+    for abbr, num in _MONTH_ABBREVS.items():
+        score = sum(1 for a, b in zip(s3, abbr) if a == b)
+        if score > best_score:
+            best_score, best_num = score, num
+    return best_num if best_score >= 2 else None
+
+
+def _parse_date_with_format(raw: str, fmt: str) -> Optional[str]:
+    """Parse an OCR'd date string using a user-specified format.
+
+    Format tokens: DD (day 01-31), MM (month 01-12), MMM (Jan abbreviation),
+                   YY (2-digit year), YYYY (4-digit year).
+    Separators in the format (space, -, /, .) become flexible in the regex so
+    OCR-dropped or substituted separators are tolerated.
+    Falls back to _parse_date() if the format regex does not match.
+    """
+    if not raw or not fmt:
+        return _parse_date(raw) if raw else None
+
+    # Tokenise format string into alternating (tok, value) / (sep, chars) pairs.
+    # Order matters: longer tokens must come before shorter prefixes (MMM > MM > M).
+    tok_re = re.compile(r'(YYYY|YY|MMM|MM|M|DD)')
+    tokens: list[tuple[str, str]] = []
+    last = 0
+    for m in tok_re.finditer(fmt):
+        if m.start() > last:
+            tokens.append(('sep', fmt[last:m.start()]))
+        tokens.append(('tok', m.group()))
+        last = m.end()
+    if last < len(fmt):
+        tokens.append(('sep', fmt[last:]))
+
+    if not any(k == 'tok' for k, _ in tokens):
+        return _parse_date(raw)
+
+    # M  = month without zero-pad (1-12, 1-2 digits)
+    # MM = month zero-padded (01-12, always 2 digits from the source)
+    #      Both accept 1-2 digit OCR output; validation enforces 1-12.
+    cap = {
+        'DD':   r'(\d{1,2})',
+        'MM':   r'(\d{1,2})',
+        'M':    r'(\d{1,2})',
+        'MMM':  r'([A-Za-z]{2,5})',
+        'YY':   r'(\d{2,4})',
+        'YYYY': r'(\d{4})',
+    }
+    regex_parts: list[str] = []
+    component_names: list[str] = []
+    for kind, val in tokens:
+        if kind == 'tok':
+            regex_parts.append(cap[val])
+            component_names.append(val)
+        else:
+            regex_parts.append(r'[\s\-\/\.\,]*')
+
+    pattern = r'^\s*' + ''.join(regex_parts) + r'\s*$'
+    m = re.match(pattern, raw.strip(), re.IGNORECASE)
+    if not m:
+        return _parse_date(raw)
+
+    comps = dict(zip(component_names, m.groups()))
+    try:
+        day = int(comps['DD']) if 'DD' in comps else 1
+        if 'MMM' in comps:
+            month = _closest_month(comps['MMM'])
+            if month is None:
+                return _parse_date(raw)
+        elif 'MM' in comps:
+            month = int(comps['MM'])
+        elif 'M' in comps:
+            month = int(comps['M'])
+        else:
+            month = 1
+
+        if 'YYYY' in comps:
+            year = int(comps['YYYY'])
+        elif 'YY' in comps:
+            y = int(comps['YY'])
+            year = y + 2000 if y < 100 else y
+        else:
+            year = datetime.now().year
+
+        if not (1 <= day <= 31 and 1 <= month <= 12):
+            return _parse_date(raw)
+        return f"{year:04d}-{month:02d}-{day:02d}"
+    except (ValueError, KeyError):
+        return _parse_date(raw)
+
+
 def _parse_amount(raw: str) -> Optional[float]:
     raw = raw.replace("$", "").replace(",", "").replace(" ", "").strip()
     try:
         return float(raw)
     except ValueError:
         return None
+
+
+def _normalize_currency(raw: str) -> Optional[float]:
+    """Parse a 2-decimal-place currency string where OCR may have dropped
+    the period and/or thousands commas."""
+    if not raw:
+        return None
+    s = raw.strip()
+    if not s:
+        return None
+
+    negative = s.startswith('-') or (s.startswith('(') and s.endswith(')'))
+    core = s.lstrip('-').strip().lstrip('(').rstrip(')').strip()
+    core = core.replace('$', '').replace(' ', '')
+
+    # Already in correct X.XX or X,XXX.XX format
+    if re.fullmatch(r'[\d,]+\.\d{2}', core):
+        val = float(core.replace(',', ''))
+        return -val if negative else val
+
+    # One decimal digit — trailing zero dropped by OCR (e.g. "100.5" → 100.50)
+    if re.fullmatch(r'[\d,]+\.\d', core):
+        val = float(core.replace(',', '') + '0')
+        return -val if negative else val
+
+    # No valid decimal — strip all non-digits and reinsert before last 2
+    digits = re.sub(r'\D', '', core)
+    if not digits:
+        return None
+    if len(digits) <= 2:
+        # Too short to reliably infer decimal; return as whole number
+        return -float(digits) if negative else float(digits)
+    val = float(digits[:-2] + '.' + digits[-2:])
+    return -val if negative else val
 
 
 def _parse_date(raw: str) -> Optional[str]:
@@ -86,7 +230,12 @@ def _parse_date(raw: str) -> Optional[str]:
     return raw if raw else None
 
 
-def _coerce(raw: str, fname: str, amount_fields: set, date_fields: set):
+def _coerce(raw: str, fname: str, currency_fields: set, amount_fields: set,
+            date_fields: set, date_formats: dict):
+    if fname in currency_fields:
+        return _normalize_currency(raw) if raw else None
+    if fname in date_formats:
+        return _parse_date_with_format(raw, date_formats[fname]) if raw else None
     if fname in amount_fields:
         return _parse_amount(raw) if raw else None
     if fname in date_fields:
@@ -207,7 +356,8 @@ def _load_pages(file_bytes: bytes, filename: str) -> list[Image.Image]:
 # ── Extraction strategies ─────────────────────────────────────────────────────
 
 def _extract_fixed_regions(words: list[dict], fields: list[dict],
-                            amount_fields: set, date_fields: set,
+                            currency_fields: set, amount_fields: set,
+                            date_fields: set, date_formats: dict,
                             page_num: int) -> list[dict]:
     """
     Each bbox covers a full column (or a single header field).
@@ -237,7 +387,7 @@ def _extract_fixed_regions(words: list[dict], fields: list[dict],
         is_repeat = field.get("repeat", False)
         if is_repeat or fname in single_line_fields or len(fw) == 0:
             text = " ".join(w["text"] for w in sorted(fw, key=lambda x: x["left"]))
-            header_row[fname] = _coerce(text, fname, amount_fields, date_fields)
+            header_row[fname] = _coerce(text, fname, currency_fields, amount_fields, date_fields, date_formats)
         else:
             multi_field_words[fname] = fw
 
@@ -270,7 +420,7 @@ def _extract_fixed_regions(words: list[dict], fields: list[dict],
             if text:
                 any_text = True
             # None when blank so the DB stores NULL, not empty string
-            row[fname] = _coerce(text, fname, amount_fields, date_fields) if text else None
+            row[fname] = _coerce(text, fname, currency_fields, amount_fields, date_fields, date_formats) if text else None
 
         if any_text:
             rows.append(row)
@@ -280,7 +430,8 @@ def _extract_fixed_regions(words: list[dict], fields: list[dict],
 
 def _extract_repeat_vertical(words: list[dict], fields: list[dict],
                               row_detection: dict,
-                              amount_fields: set, date_fields: set,
+                              currency_fields: set, amount_fields: set,
+                              date_fields: set, date_formats: dict,
                               page_num: int) -> list[dict]:
     """
     User mapped one row; step down the page at row_height intervals.
@@ -306,7 +457,7 @@ def _extract_repeat_vertical(words: list[dict], fields: list[dict],
             raw = _clean(" ".join(w["text"] for w in sorted(fw, key=lambda x: x["left"])))
             if raw:
                 any_text = True
-            row[field["name"]] = _coerce(raw, field["name"], amount_fields, date_fields)
+            row[field["name"]] = _coerce(raw, field["name"], currency_fields, amount_fields, date_fields, date_formats)
         if any_text:
             rows.append(row)
         y += row_h
@@ -397,10 +548,16 @@ def extract_with_template(file_bytes: bytes, filename: str, template: dict) -> l
     rd       = template.get("row_detection", {})
     strategy = rd.get("strategy", "fixed_regions")
 
-    amount_fields = {f["name"] for f in fields
-                     if any(k in f["name"].lower()
-                            for k in ("amount", "balance", "withdrawal", "deposit", "total", "fee"))}
-    date_fields   = {f["name"] for f in fields if "date" in f["name"].lower()}
+    currency_fields = {f["name"] for f in fields if f.get("currency", False)}
+    amount_fields   = {f["name"] for f in fields
+                       if f["name"] not in currency_fields and
+                       any(k in f["name"].lower()
+                           for k in ("amount", "balance", "withdrawal", "deposit", "total", "fee"))}
+    # Fields with an explicit date_format take priority; remaining "date" fields use auto-detect
+    date_formats    = {f["name"]: f["date_format"] for f in fields
+                       if f.get("date_format", "").strip()}
+    date_fields     = {f["name"] for f in fields
+                       if "date" in f["name"].lower() and f["name"] not in date_formats}
 
     # Template bboxes are in the 2x (144 DPI) canvas pixel space for PDFs;
     # OCR runs at 300/72 DPI. Scale to match before filtering words.
@@ -421,9 +578,9 @@ def extract_with_template(file_bytes: bytes, filename: str, template: dict) -> l
 
         words = _ocr_page(img)   # single Tesseract call per page
         if strategy == "repeat_vertical":
-            rows = _extract_repeat_vertical(words, fields, rd, amount_fields, date_fields, page_num)
+            rows = _extract_repeat_vertical(words, fields, rd, currency_fields, amount_fields, date_fields, date_formats, page_num)
         else:
-            rows = _extract_fixed_regions(words, fields, amount_fields, date_fields, page_num)
+            rows = _extract_fixed_regions(words, fields, currency_fields, amount_fields, date_fields, date_formats, page_num)
         all_rows.extend(rows)
 
     # Collapse multi-line transactions (group_anchor + concat_in_group fields)
