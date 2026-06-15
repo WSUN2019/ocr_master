@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — OCR Master</title>
+  <style>
+    body { font-family: Segoe UI, Arial, sans-serif; max-width: 760px; margin: 48px auto; padding: 0 24px; color: #222; line-height: 1.7; }
+    h1 { color: #1a3557; }
+    h2 { color: #1a3557; margin-top: 2em; font-size: 1.1em; }
+    p, li { font-size: 0.97em; }
+    footer { margin-top: 3em; font-size: 0.85em; color: #666; border-top: 1px solid #ddd; padding-top: 1em; }
+  </style>
+</head>
+<body>
+
+<h1>Privacy Policy — OCR Master</h1>
+<p><strong>Effective date:</strong> 14 June 2026</p>
+
+<p>OCR Master ("the App") is a fully offline desktop application for extracting structured transaction data from bank statement images and PDFs. This policy explains how the App handles your information.</p>
+
+<h2>1. No Data Leaves Your Device</h2>
+<p>The App does not connect to the internet, does not transmit any data to external servers, and does not use cloud services or third-party APIs. All processing happens entirely on your local machine.</p>
+
+<h2>2. What the App Stores Locally</h2>
+<p>The App stores the following data <strong>on your device only</strong>, in a local SQLite database file located in your chosen data folder (default: <code>Documents\OCR Master\</code>):</p>
+<ul>
+  <li>Transaction records extracted from the bank statement files you supply (dates, descriptions, amounts, balances)</li>
+  <li>An import log recording which files you have processed</li>
+  <li>Any notes or edits you make to extracted records</li>
+  <li>App configuration settings (file paths, Tesseract location)</li>
+</ul>
+<p>This data is stored solely to enable the App's core functionality. It is never accessed by the developer or any third party.</p>
+
+<h2>3. Bank Statement Files</h2>
+<p>PDF and image files you open are read into memory for OCR processing and are never copied, uploaded, or retained by the App beyond your session. Extracted text is saved only as structured records in your local database as described above.</p>
+
+<h2>4. No Analytics or Crash Reporting</h2>
+<p>The App does not include any analytics, telemetry, advertising SDKs, or crash-reporting services. No usage data is collected.</p>
+
+<h2>5. Your Control Over Your Data</h2>
+<p>All data is stored locally on your device. You can delete the database file, individual records, or the entire data folder at any time. Uninstalling the App will remove the application files; the installer will ask whether you also wish to delete your data folder.</p>
+
+<h2>6. Children's Privacy</h2>
+<p>The App is not directed at children under 13 and does not knowingly collect any personal information from children.</p>
+
+<h2>7. Changes to This Policy</h2>
+<p>If this policy changes, the updated version will be posted at this URL with a revised effective date.</p>
+
+<h2>8. Contact</h2>
+<p>If you have questions about this policy, please open an issue on the project repository or contact the developer via the Microsoft Store listing.</p>
+
+<footer>OCR Master — Bank Statement Extractor &nbsp;|&nbsp; Privacy Policy</footer>
+
+</body>
+</html>
