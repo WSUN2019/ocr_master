@@ -1,0 +1,16 @@
+OCR Master — Privacy Policy
+Effective date: 14 June 2026
+
+No Data Leaves Your Device. OCR Master is a fully offline desktop application. It does not connect to the internet, transmit data to any external server, or use cloud services or third-party APIs. All processing happens entirely on your local machine.
+
+What the App Stores Locally. The App stores transaction records extracted from the bank statement files you supply (dates, descriptions, amounts, balances), an import log, any notes or edits you make, and app configuration settings. All data is stored in a local SQLite database on your device only, in your chosen data folder (default: Documents\OCR Master\). It is never accessed by the developer or any third party.
+
+Bank Statement Files. PDF and image files you open are read into memory for OCR processing only and are never copied, uploaded, or retained beyond your session.
+
+No Analytics or Crash Reporting. The App contains no analytics, telemetry, advertising SDKs, or crash-reporting services.
+
+Your Control Over Your Data. You can delete the database file, individual records, or the entire data folder at any time. The uninstaller will ask whether you wish to delete your data folder.
+
+Children's Privacy. The App is not directed at children under 13 and does not knowingly collect information from children.
+
+Contact. Questions can be submitted via the Microsoft Store listing page.
