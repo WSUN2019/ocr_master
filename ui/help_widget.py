@@ -346,7 +346,8 @@ class HelpWidget(QWidget):
                   "multiple statements at once.</i>"),
             ("4", "<b>Review Extracted Data</b> — After single-file OCR, rows appear in "
                   "the table. The <i>balance_check</i> column (✓ green / ✗ red) "
-                  "automatically verifies the running balance using debit/credit math. "
+                  "checks the running balance using debit/credit math as a review aid only — "
+                  "always verify figures against your original statements. "
                   "Sign convention (standard vs inverted) is auto-detected per batch. "
                   "In batch mode, data is already saved — review it in History."),
             ("5", "<b>Fix Errors Inline</b> — Double-click any editable cell to correct "

@@ -131,7 +131,7 @@ class AboutWidget(QWidget):
             ("Repeat & Sub-group",  "Repeat fields copy to every row; sub-group fields fill-down (e.g. RBS date/balance per group)"),
             ("Single-file Extract", "Add files manually, run OCR, review and edit inline before saving"),
             ("Batch Processing",    "Point at a folder — all files process under one batch name; each moves to a complete folder on finish"),
-            ("Balance Validation",  "Auto-computed ✓/✗ column verifies running balance; sign convention detected per batch; reruns on edit"),
+            ("Balance Validation",  "Auto-computed ✓/✗ column checks running balance as a review aid only — not a guarantee of accuracy; reruns on edit"),
             ("Inline Editing",      "Double-click any cell to correct OCR errors; note column auto-stamped with before/after values"),
             ("History",             "Browse, filter, search, re-edit, and delete batches of saved transactions"),
             ("Export",              "CSV export from both Extract and History views"),

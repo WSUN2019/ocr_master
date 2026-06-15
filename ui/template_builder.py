@@ -172,7 +172,7 @@ class TemplateBuilderWidget(QWidget):
         self._currency_check = QCheckBox("Currency (2 decimal places  $)")
         self._currency_check.setToolTip(
             "OCR sometimes drops the decimal point and/or thousands comma.\n"
-            "Enabling this reconstructs the correct value from raw digits:\n"
+            "Enabling this attempts to reconstruct the value from raw digits (verify results):\n"
             "  '100000'  →  1000.00  (from '1,000.00')\n"
             "  '10050'   →   100.50  (from '100.50')\n"
             "Can be combined with any of the grouping flags above."
@@ -800,7 +800,7 @@ class _FieldNameDialog(QWidget):
         self._currency_chk = QCheckBox("Currency (2 decimal places  $)")
         self._currency_chk.setToolTip(
             "OCR sometimes drops the decimal point and/or thousands comma.\n"
-            "Enabling this reconstructs the correct value from raw digits:\n"
+            "Enabling this attempts to reconstruct the value from raw digits (verify results):\n"
             "  '100000'  →  1000.00  (from '1,000.00')\n"
             "  '10050'   →   100.50  (from '100.50')\n"
             "Can be combined with any grouping flag above."
