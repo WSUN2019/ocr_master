@@ -173,22 +173,6 @@ class AboutWidget(QWidget):
 
         root.addWidget(tech)
 
-        # ── Privacy ───────────────────────────────────────────────────────────
-        sec = QGroupBox("Privacy & Security")
-        sec.setStyleSheet(_CARD_STYLE)
-        sl = QVBoxLayout(sec)
-        note = QLabel(
-            "OCR Master runs entirely on your local machine. "
-            "No statement images, transaction data, or database content is ever "
-            "transmitted to the internet, cloud services, or any third party.\n\n"
-            "Sensitive files (images, PDFs, CSVs, the database) are excluded from "
-            "version control via .gitignore."
-        )
-        note.setWordWrap(True)
-        note.setStyleSheet(f"color: {_BODY}; font-size: 12px; background: transparent;")
-        sl.addWidget(note)
-        root.addWidget(sec)
-
         # ── Experiment ────────────────────────────────────────────────────────
         exp = QGroupBox("About This Project")
         exp.setStyleSheet(_CARD_STYLE)
