@@ -26,6 +26,20 @@ if (-not (Test-Path "dist\OCRMaster\OCRMaster.exe")) {
     exit 1
 }
 
+if (-not (Test-Path "dist\OCRMaster\tesseract\tesseract.exe")) {
+    Write-Host "[ERROR] Bundled Tesseract not found at dist\OCRMaster\tesseract\tesseract.exe" -ForegroundColor Red
+    Write-Host "        Run build_windows.ps1 first — it bundles Tesseract automatically."
+    Read-Host "Press Enter to exit"
+    exit 1
+}
+
+if (-not (Test-Path "dist\OCRMaster\LICENSE")) {
+    Write-Host "[WARNING] LICENSE file missing from dist\OCRMaster\ — run build_windows.ps1 first." -ForegroundColor Yellow
+}
+if (-not (Test-Path "dist\OCRMaster\NOTICES.txt")) {
+    Write-Host "[WARNING] NOTICES.txt missing from dist\OCRMaster\ — run build_windows.ps1 first." -ForegroundColor Yellow
+}
+
 # ── Step 2: Find makeappx.exe ─────────────────────────────────────────────────
 Write-Host "[1/5] Looking for makeappx.exe (Windows SDK)..." -ForegroundColor Yellow
 

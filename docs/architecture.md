@@ -51,14 +51,16 @@ ocr_master/
 │   ├── database_widget.py    # Database browser — raw table viewer, import_log management
 │   ├── settings_widget.py    # Template management + configurable paths
 │   ├── help_widget.py        # Workflow guide
-│   ├── about_widget.py       # App info + experiment notes
+│   ├── about_widget.py       # App info, tech stack, live Tesseract version
 │   └── styles.py             # PyQt6 stylesheet (light theme)
 │
 ├── build/                    # Windows packaging
 │   ├── build_windows.bat     # Double-click launcher for the build script
-│   ├── build_windows.ps1     # Full build: clean → deps → PyInstaller → Inno Setup
+│   ├── build_windows.ps1     # Full build: clean → deps → PyInstaller → bundle Tesseract → Inno Setup
 │   ├── OCRMaster.spec        # PyInstaller configuration
-│   └── installer.iss         # Inno Setup script → OCRMasterSetup.exe
+│   ├── installer.iss         # Inno Setup script → OCRMasterSetup.exe
+│   ├── package_msix.ps1      # MSIX packager → OCRMaster.msix (Microsoft Store)
+│   └── msix/                 # MSIX manifest and Store assets
 │
 ├── create_dev_zip.bat        # Zip source files for sharing with another developer
 ├── templates/                # User-created bank templates (JSON, gitignored)
@@ -88,7 +90,7 @@ All 7 paths are user-configurable and stored in `config.json` (in `APP_DIR`). De
 
 | Path key | Default location | Purpose |
 |----------|-----------------|---------|
-| `tesseract_path` | `C:\Program Files\Tesseract-OCR\tesseract.exe` | OCR engine binary |
+| `tesseract_path` | `{app}\tesseract\tesseract.exe` (bundled) | OCR engine binary — override in Settings to use a different install |
 | `db_path` | `Documents\OCR Master\ocr_master.db` | Transaction database |
 | `templates_dir` | `Documents\OCR Master\templates\` | Bank layout templates |
 | `input_dir` | `Documents\OCR Master\input_files\` | Statement imports |
@@ -304,10 +306,35 @@ build_windows.ps1
   +- pip install pyinstaller
   +- pyinstaller build\OCRMaster.spec
   |    +- Output: dist\OCRMaster\OCRMaster.exe  (self-contained folder)
+  |    +- Also copies: LICENSE, NOTICES.txt, docs/, input_files/Examples/, templates/
+  |
+  +- Copy C:\Program Files\Tesseract-OCR\ -> dist\OCRMaster\tesseract\
+  |    (exe + DLLs + tessdata + license files)
   |
   +- iscc build\installer.iss
        +- Output: build\Output\OCRMasterSetup.exe  (distribute this)
 ```
+
+### MSIX (Microsoft Store)
+
+```
+package_msix.ps1  [run after build_windows.ps1]
+  |
+  +- Verifies dist\OCRMaster\OCRMaster.exe exists
+  +- Verifies dist\OCRMaster\tesseract\tesseract.exe exists
+  +- Copies dist\OCRMaster\ + AppxManifest.xml + Assets\ -> build\MSIXPackage\
+  +- makeappx pack -> build\Output\OCRMaster.msix  (upload to Partner Center)
+```
+
+Tesseract, LICENSE, and NOTICES.txt are all bundled inside the MSIX — no user action required on install.
+
+### Tesseract Path Resolution (`core/extractor.py`)
+
+At startup the app resolves the Tesseract binary in priority order:
+
+1. `config.json` `tesseract_path` — if set and the file exists on disk (user override via Settings)
+2. `{exe dir}\tesseract\tesseract.exe` — bundled copy alongside `OCRMaster.exe` (installed / MSIX builds)
+3. `C:\Program Files\Tesseract-OCR\tesseract.exe` — standard system install (dev / fallback)
 
 ### PyInstaller Notes (`OCRMaster.spec`)
 
@@ -315,14 +342,15 @@ build_windows.ps1
 - **Excluded**: `tkinter`, `matplotlib`, `scipy`, `pyarrow` — not used, saves ~80 MB
 - **Hidden imports**: `pdfplumber`, `pdfminer`, `fitz` — dynamically imported at runtime
 - **Bundled DLLs**: `python3*.dll`, `vcruntime*.dll` — prevents startup failures on machines without VC++ Redist
+- **Bundled data**: `LICENSE`, `NOTICES.txt`, `docs/`, `input_files/Examples/`, `templates/saiminbank.json`
 
 ### Installer Notes (`installer.iss`)
 
-- App binaries → `C:\Program Files\OCR Master\`
-- Wizard page: Tesseract (auto via winget or manual)
+- App binaries + bundled Tesseract → `C:\Program Files\OCR Master\`
 - Wizard page: data folder picker (default `Documents\OCR Master\`)
 - Writes complete 7-path `config.json` to the user-selected data folder at install completion
 - Creates all data subdirectories
+- No internet connection required — Tesseract is included in the installer
 - Uninstall asks whether to delete user data or keep it
 
 ### Developer Sharing

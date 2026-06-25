@@ -153,7 +153,15 @@ All 7 paths (Tesseract binary, database, templates, input, output, batch import,
 
 ## Microsoft Store
 
-The app is structured for MSIX packaging and Store submission. The binary output from PyInstaller can be wrapped with the MSIX Packaging Tool and submitted via Microsoft Partner Center. This step is documented but not yet completed — it remains part of the original experiment scope.
+The app is available on the Microsoft Store. The MSIX package is built using `build\package_msix.ps1` after running `build\build_windows.ps1`. Tesseract is bundled inside the package — no additional setup is required after install.
+
+---
+
+## License
+
+This project is licensed under the **GNU General Public License v3.0** — see [LICENSE](LICENSE) for the full text.
+
+Third-party component licenses (Tesseract, PyQt6, PyMuPDF, and others) are documented in [NOTICES.txt](NOTICES.txt).
 
 ---
 
