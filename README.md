@@ -75,16 +75,19 @@ Double-click `create_dev_zip.bat` — produces a clean dated zip of all source f
 
 ## Windows — Install (end users)
 
-**Run `OCRMasterSetup.exe`** — one file installs everything.
+**Run `OCRMasterSetup.exe`** — one file installs everything, including Tesseract OCR.
 
 The installer:
-- Installs the app to `C:\Program Files\OCR Master\`
-- Offers to install Tesseract OCR automatically (via winget) or opens the download page
+- Installs the app **and a bundled copy of Tesseract OCR** to `C:\Program Files\OCR Master\` — no separate Tesseract download needed
 - Lets you choose where all user files are stored — default: `Documents\OCR Master\`
 - Creates Start Menu + optional Desktop shortcuts
 - Full uninstaller via Windows Settings → Apps; on uninstall asks whether to keep or delete your data
 
-> Tesseract auto-install via winget requires Windows 10 (1809+) or Windows 11.
+---
+
+## Windows — Install (Microsoft Store)
+
+Install from the Microsoft Store. Tesseract OCR is bundled inside the Store package — no additional setup is required.
 
 ---
 
@@ -96,9 +99,11 @@ Double-click `build\build_windows.bat`, or from a terminal:
 powershell -ExecutionPolicy Bypass -File build\build_windows.ps1
 ```
 
-The script cleans previous output, installs dependencies, runs PyInstaller, and compiles the Inno Setup installer automatically.
+The script cleans previous output, installs dependencies, runs PyInstaller, **bundles Tesseract** from the build machine into `dist\OCRMaster\tesseract\`, and compiles the Inno Setup installer automatically.
 
 **Output:** `build\Output\OCRMasterSetup.exe` — this is the file you distribute.
+
+> Tesseract must be installed on the build machine (`winget install UB-Mannheim.TesseractOCR`). It is bundled automatically at build time — end users do not need it.
 
 See [docs/Windows_Install_Instructions.md](docs/Windows_Install_Instructions.md) for full prerequisites and step-by-step detail.
 

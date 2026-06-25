@@ -2,7 +2,9 @@
 
 ## Overview
 
-These steps produce `OCRMasterSetup.exe` — a double-click installer that handles everything: installs the app, Tesseract OCR, and lets the user choose where their data files live.
+These steps produce `OCRMasterSetup.exe` — a double-click installer that handles everything: installs the app and a bundled copy of Tesseract OCR, and lets the user choose where their data files live.
+
+Tesseract is **bundled inside the installer** — end users do not need to install it separately.
 
 ---
 
@@ -11,9 +13,8 @@ These steps produce `OCRMasterSetup.exe` — a double-click installer that handl
 | Tool | Where | Notes |
 |------|-------|-------|
 | **Python 3.11+** | https://www.python.org/downloads/ | Check "Add Python to PATH" during install |
+| **Tesseract OCR** | `winget install UB-Mannheim.TesseractOCR` | Required on the **build machine** so the build script can bundle it |
 | **Inno Setup 6** | https://jrsoftware.org/isinfo.php | Free; creates the installer EXE |
-
-> Tesseract does **not** need to be on the build machine — the installer handles it for end users.
 
 ---
 
@@ -40,7 +41,8 @@ The script automatically:
 1. Cleans `dist\OCRMaster\`, `build\OCRMaster\`, and `build\Output\` for a fresh build
 2. Installs Python dependencies (`requirements.txt` + `pyinstaller`)
 3. Runs PyInstaller → `dist\OCRMaster\OCRMaster.exe`
-4. Compiles the Inno Setup installer → `build\Output\OCRMasterSetup.exe`
+4. Copies Tesseract from `C:\Program Files\Tesseract-OCR\` into `dist\OCRMaster\tesseract\`
+5. Compiles the Inno Setup installer → `build\Output\OCRMasterSetup.exe`
 
 If Inno Setup is not found, the script prints instructions for the manual compile step.
 
@@ -63,16 +65,15 @@ Send `build\Output\OCRMasterSetup.exe` to end users. That single file is the com
 ### Install flow
 
 1. Selects install directory: `C:\Program Files\OCR Master\`
-2. If Tesseract is **not** installed, shows a choice:
-   - **Install automatically** — runs `winget install UB-Mannheim.TesseractOCR` silently
-   - **Install manually** — opens the Tesseract download page in the browser
-3. **Data folder picker** — user chooses where all data files are stored (default: `Documents\OCR Master\`)
-4. Copies app binaries to `C:\Program Files\OCR Master\`
-5. Writes `config.json` with all 7 paths to the user-selected data folder (`Documents\OCR Master\` by default)
-6. Creates all data subdirectories under the selected data folder
-7. Checks for Visual C++ Redistributable; offers download if missing
-8. Creates Start Menu shortcut + optional Desktop shortcut
-9. Offers to launch the app immediately
+2. **Data folder picker** — user chooses where all data files are stored (default: `Documents\OCR Master\`)
+3. Copies app binaries **and bundled Tesseract** to `C:\Program Files\OCR Master\`
+4. Writes `config.json` with all 7 paths to the user-selected data folder (`Documents\OCR Master\` by default)
+5. Creates all data subdirectories under the selected data folder
+6. Checks for Visual C++ Redistributable; offers download if missing
+7. Creates Start Menu shortcut + optional Desktop shortcut
+8. Offers to launch the app immediately
+
+No internet connection is required during installation.
 
 ### User data locations (defaults)
 
@@ -103,7 +104,7 @@ On uninstall, the installer asks:
 ## Notes
 
 - **64-bit Windows only** — matches Tesseract's `w64` build and Python 3.11+
-- **Tesseract auto-install requires winget** — available on Windows 10 1809+ and all Windows 11
+- **Tesseract must be installed on the build machine** — the build script copies it from `C:\Program Files\Tesseract-OCR\`; end users do not need it separately
 - The build script window stays open after completion (or on error) so you can read the output
 
 ---

@@ -31,12 +31,24 @@ import pytesseract
 from PIL import Image
 
 if sys.platform == "win32":
-    try:
-        from core.config import get_config as _get_config
-        _tess = _get_config().tesseract_path
-        pytesseract.pytesseract.tesseract_cmd = _tess or r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-    except Exception:
-        pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+    def _resolve_tesseract() -> str:
+        # 1. User-configured path in config.json (must exist on disk)
+        try:
+            from core.config import get_config as _get_config
+            cfg = _get_config().tesseract_path
+            if cfg and Path(cfg).exists():
+                return cfg
+        except Exception:
+            pass
+        # 2. Bundled alongside OCRMaster.exe (PyInstaller / MSIX build)
+        if getattr(sys, "frozen", False):
+            bundled = Path(sys.executable).parent / "tesseract" / "tesseract.exe"
+            if bundled.exists():
+                return str(bundled)
+        # 3. Standard system install
+        return r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+
+    pytesseract.pytesseract.tesseract_cmd = _resolve_tesseract()
 
 # Single-call OCR config: treat page as sparse text with a mix of blocks
 _TSS_PAGE = "--psm 11"

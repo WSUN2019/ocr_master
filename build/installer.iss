@@ -69,9 +69,7 @@ Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(
 [Code]
 
 var
-  TessPage:    TInputOptionWizardPage;
   DataDirPage: TInputDirWizardPage;
-  TessAlreadyInstalled: Boolean;
 
 // ── Existing install detection ────────────────────────────────────────────────
 
@@ -114,16 +112,6 @@ end;
 
 // ── Dependency checks ─────────────────────────────────────────────────────────
 
-function TesseractInstalled(): Boolean;
-var
-  Path: String;
-begin
-  Result :=
-    RegQueryStringValue(HKLM,   'SOFTWARE\Tesseract-OCR', 'InstallDir', Path) or
-    RegQueryStringValue(HKLM32, 'SOFTWARE\Tesseract-OCR', 'InstallDir', Path) or
-    FileExists('C:\Program Files\Tesseract-OCR\tesseract.exe');
-end;
-
 function VCRedistInstalled(): Boolean;
 var
   Ver: String;
@@ -161,64 +149,11 @@ begin
   SaveStringsToFile(ConfigPath, Lines, False);
 end;
 
-// ── Tesseract auto-install ────────────────────────────────────────────────────
-
-procedure InstallTesseractAuto();
-var
-  ResultCode: Integer;
-begin
-  MsgBox(
-    'Tesseract will now be installed automatically.' + #13#10 + #13#10 +
-    'A progress window will appear. Please wait for it to finish.',
-    mbInformation, MB_OK);
-
-  Exec(
-    'powershell.exe',
-    '-ExecutionPolicy Bypass -WindowStyle Normal -Command ' +
-    '"winget install --id UB-Mannheim.TesseractOCR --silent ' +
-    '--accept-package-agreements --accept-source-agreements"',
-    '', SW_SHOW, ewWaitUntilTerminated, ResultCode);
-
-  if not FileExists('C:\Program Files\Tesseract-OCR\tesseract.exe') then
-  begin
-    MsgBox(
-      'Automatic installation did not complete.' + #13#10 +
-      'The Tesseract download page will open in your browser.' + #13#10 + #13#10 +
-      'Download: tesseract-ocr-w64-setup-*.exe' + #13#10 +
-      'OCR Master will work once Tesseract is installed.',
-      mbError, MB_OK);
-    ShellExec('open', 'https://github.com/UB-Mannheim/tesseract/wiki',
-              '', '', SW_SHOW, ewNoWait, ResultCode);
-  end;
-end;
-
 // ── Wizard setup ──────────────────────────────────────────────────────────────
 
 procedure InitializeWizard();
-var
-  AfterID: Integer;
 begin
-  TessAlreadyInstalled := TesseractInstalled();
-
-  AfterID := wpSelectDir;
-
-  // Tesseract page (only when not installed)
-  if not TessAlreadyInstalled then
-  begin
-    TessPage := CreateInputOptionPage(
-      AfterID,
-      'Tesseract OCR Engine',
-      'OCR Master requires Tesseract to read bank statements.',
-      'Tesseract is not installed on this machine. How would you like to install it?',
-      True, False
-    );
-    TessPage.Add('Install Tesseract automatically  (recommended — needs internet)');
-    TessPage.Add('I will install Tesseract manually after setup');
-    TessPage.SelectedValueIndex := 0;
-    AfterID := TessPage.ID;
-  end;
-
-  // Data folder page (always shown)
+  // Data folder page
   DataDirPage := CreateInputDirPage(
     AfterID,
     'User Data Location',
@@ -240,25 +175,9 @@ var
 begin
   if CurStep <> ssPostInstall then Exit;
 
-  TessExe := 'C:\Program Files\Tesseract-OCR\tesseract.exe';
+  // Tesseract is bundled inside the install directory
+  TessExe := ExpandConstant('{app}') + '\tesseract\tesseract.exe';
   DataDir  := DataDirPage.Values[0];
-
-  // ── Tesseract ──
-  if not TessAlreadyInstalled then
-  begin
-    if Assigned(TessPage) and (TessPage.SelectedValueIndex = 0) then
-      InstallTesseractAuto()
-    else
-    begin
-      ShellExec('open', 'https://github.com/UB-Mannheim/tesseract/wiki',
-                '', '', SW_SHOW, ewNoWait, ErrorCode);
-      MsgBox(
-        'The Tesseract download page has been opened in your browser.' + #13#10 + #13#10 +
-        'Download and run:  tesseract-ocr-w64-setup-*.exe' + #13#10 + #13#10 +
-        'OCR Master will detect Tesseract automatically once it is installed.',
-        mbInformation, MB_OK);
-    end;
-  end;
 
   // ── Create all data directories ──
   ForceDirectories(DataDir + '\templates');

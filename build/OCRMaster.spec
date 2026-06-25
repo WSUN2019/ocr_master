@@ -38,6 +38,9 @@ a = Analysis(
         (str(ROOT / 'input_files' / 'Examples'), 'input_files/Examples'),
         # Ship the SaiminBank example template
         (str(ROOT / 'templates' / 'saiminbank.json'), 'templates'),
+        # License and third-party notices — required for GPL / Apache 2.0 redistribution
+        (str(ROOT / 'LICENSE'), '.'),
+        (str(ROOT / 'NOTICES.txt'), '.'),
     ],
     hiddenimports=[
         # PyQt6 platform plugin loaded at runtime

@@ -62,7 +62,7 @@ function Install-Via-Winget {
 
 # ── Step 0: Clean previous build output ───────────────────────────────────────
 
-Write-Host "[0/4] Cleaning previous build output..." -ForegroundColor Yellow
+Write-Host "[0/5] Cleaning previous build output..." -ForegroundColor Yellow
 $CleanPaths = @("dist\OCRMaster", "build\OCRMaster", "build\Output")
 foreach ($p in $CleanPaths) {
     if (Test-Path $p) {
@@ -76,7 +76,7 @@ Write-Host ""
 
 # ── Step 1: Ensure Python 3.11+ is available ──────────────────────────────────
 
-Write-Host "[1/4] Checking Python..." -ForegroundColor Yellow
+Write-Host "[1/5] Checking Python..." -ForegroundColor Yellow
 
 $pythonOk = $false
 if (Get-Command python -ErrorAction SilentlyContinue) {
@@ -134,7 +134,7 @@ Write-Host ""
 
 # ── Step 2: Install Python dependencies ───────────────────────────────────────
 
-Write-Host "[2/4] Installing Python dependencies..." -ForegroundColor Yellow
+Write-Host "[2/5] Installing Python dependencies..." -ForegroundColor Yellow
 python -m pip install --upgrade pip --quiet
 python -m pip install -r requirements.txt --quiet
 python -m pip install pyinstaller --quiet
@@ -149,7 +149,7 @@ Write-Host ""
 
 # ── Step 3: Build with PyInstaller ────────────────────────────────────────────
 
-Write-Host "[3/4] Building executable with PyInstaller..." -ForegroundColor Yellow
+Write-Host "[3/5] Building executable with PyInstaller..." -ForegroundColor Yellow
 python -m PyInstaller build\OCRMaster.spec --noconfirm
 if ($LASTEXITCODE -ne 0) {
     Write-Host "[ERROR] PyInstaller build failed." -ForegroundColor Red
@@ -158,13 +158,46 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Host ""
 Write-Host "      Executable: dist\OCRMaster\OCRMaster.exe" -ForegroundColor Green
-Write-Host "      Tip: test it before building the installer."
 Write-Host ""
 
 
-# ── Step 4: Compile installer with Inno Setup ─────────────────────────────────
+# ── Step 4: Bundle Tesseract alongside the executable ────────────────────────
 
-Write-Host "[4/4] Looking for Inno Setup compiler (iscc)..." -ForegroundColor Yellow
+Write-Host "[4/5] Bundling Tesseract OCR..." -ForegroundColor Yellow
+
+$TessSource = "C:\Program Files\Tesseract-OCR"
+$TessDest   = "dist\OCRMaster\tesseract"
+
+if (Test-Path "$TessSource\tesseract.exe") {
+    if (Test-Path $TessDest) { Remove-Item $TessDest -Recurse -Force }
+    New-Item -ItemType Directory -Force -Path $TessDest | Out-Null
+
+    Copy-Item "$TessSource\tesseract.exe"  "$TessDest\"  -Force
+    Copy-Item "$TessSource\*.dll"          "$TessDest\"  -Force -ErrorAction SilentlyContinue
+    if (Test-Path "$TessSource\tessdata") {
+        Copy-Item "$TessSource\tessdata"   "$TessDest\"  -Recurse -Force
+    }
+    # Copy Tesseract's own license/notice files (required by Apache 2.0)
+    foreach ($f in @("LICENSE", "COPYING", "NOTICE", "AUTHORS", "COPYRIGHT")) {
+        if (Test-Path "$TessSource\$f") {
+            Copy-Item "$TessSource\$f" "$TessDest\TESSERACT_$f" -Force
+        }
+    }
+
+    $tessSize = [Math]::Round(
+        (Get-ChildItem $TessDest -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB, 0)
+    Write-Host "      Bundled Tesseract ($tessSize MB) -> $TessDest" -ForegroundColor Green
+} else {
+    Write-Host "[WARNING] Tesseract not found at $TessSource" -ForegroundColor Yellow
+    Write-Host "          Install it first:  winget install UB-Mannheim.TesseractOCR"
+    Write-Host "          The built exe will fall back to any system Tesseract at runtime."
+}
+Write-Host ""
+
+
+# ── Step 5: Compile installer with Inno Setup ─────────────────────────────────
+
+Write-Host "[5/5] Looking for Inno Setup compiler (iscc)..." -ForegroundColor Yellow
 
 $IsccCandidates = @(
     "iscc",
@@ -199,7 +232,7 @@ if (-not $IsccPath) {
 }
 
 if ($IsccPath) {
-    Write-Host "[4/4] Compiling installer with Inno Setup..." -ForegroundColor Yellow
+    Write-Host "[5/5] Compiling installer with Inno Setup..." -ForegroundColor Yellow
     & $IsccPath "build\installer.iss"
     if ($LASTEXITCODE -eq 0) {
         Write-Host ""
