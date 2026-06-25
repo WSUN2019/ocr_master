@@ -13,7 +13,7 @@
   <Identity
     Name="WS2026.OCRMaster"
     Publisher="CN=5173FDE3-098A-4163-8004-3AC3FD6CBE2D"
-    Version="1.2.0.0"
+    Version="1.2.1.0"
     ProcessorArchitecture="x64" />
 
   <Properties>

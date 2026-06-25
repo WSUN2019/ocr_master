@@ -8,7 +8,7 @@
 ; Output: build\Output\OCRMasterSetup.exe
 
 #define AppName      "OCR Master"
-#define AppVersion   "1.2.0"
+#define AppVersion   "1.2.1"
 #define AppPublisher "WS2026"
 #define AppURL       "https://github.com/WSUN2019/ocr_master"
 #define AppExeName   "OCRMaster.exe"
@@ -155,7 +155,7 @@ procedure InitializeWizard();
 begin
   // Data folder page
   DataDirPage := CreateInputDirPage(
-    AfterID,
+    wpSelectDir,
     'User Data Location',
     'Where should OCR Master store all your files?',
     'All data — templates, database, imports, exports, and batch files — will be' + #13#10 +

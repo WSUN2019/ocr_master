@@ -110,7 +110,7 @@ class AboutWidget(QWidget):
         il = QVBoxLayout(info)
         il.setSpacing(8)
         for label, value in [
-            ("Version",  "1.2.0"),
+            ("Version",  "1.2.1"),
             ("Created",  "June 2026"),
             ("Platform", "Linux · Windows"),
         ]:
